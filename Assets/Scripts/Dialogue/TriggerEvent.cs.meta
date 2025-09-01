@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+<<<<<<<< HEAD:Assets/Scripts/Dialogue/TriggerEvent.cs.meta
+guid: 694c777410dbf0d4abb6f7dc35cad3ea
+========
+guid: 9c0eff73e7f099a44bc7f08c406dbd31
+>>>>>>>> 1242ff7bb1c36d6b6e01126e93327ccf447d7a5b:Assets/Scripts/Dialogue/TutorialHighlighter.cs.meta
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
