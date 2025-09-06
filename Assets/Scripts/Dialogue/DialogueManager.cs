@@ -1,19 +1,17 @@
 using UnityEngine;
 using TMPro;
 using System.Collections;
-using JetBrains.Annotations;
 
 public class DialogueManager : MonoBehaviour
 {
     [Header("Dialogue Data")]
-    [TextArea] public string[] dialogues1; // 1½ºÅ×ÀÌÁö ´ë»ç
-    [TextArea] public string[] dialogues2; // 2½ºÅ×ÀÌÁö ´ë»ç
-    [TextArea] public string[] dialogues3; // 3½ºÅ×ÀÌÁö ´ë»ç
-    [TextArea] public string[] dialogues4; // 4½ºÅ×ÀÌÁö ´ë»ç
-    [TextArea] public string[] dialogues5; // 5½ºÅ×ÀÌÁö ´ë»ç
+    [TextArea] public string[] dialogues1;
+    [TextArea] public string[] dialogues2;
+    [TextArea] public string[] dialogues3;
+    [TextArea] public string[] dialogues4;
+    [TextArea] public string[] dialogues5;
 
-
-    private string[] currentDialogues; // ÇöÀç ÁøÇà ÁßÀÎ ´ë»ç ¹è¿­
+    private string[] currentDialogues;
 
     private int dialogueIndex = 0;
     private bool dialogueActive = false;
@@ -26,41 +24,52 @@ public class DialogueManager : MonoBehaviour
     public Camera mainCamera;
 
     [Header("Extra UI to Disable During Dialogue")]
-    public GameObject variableJoystick;     // Variable Joystick ¿ÀºêÁ§Æ®
-    public GameObject promptOpenButton;     // PromptOpen_Button ¿ÀºêÁ§Æ®
+    public GameObject variableJoystick;
+    public GameObject promptOpenButton;
 
     [Header("Blocker During Dialogue")]
     public GameObject dialogueBlocker;
 
-    [Header("SFX")]
+    [Header("SFX / Anim")]
     public Animator lexyAnimator;
-    public AudioSource audioSource;    // »ç¿îµå Ãâ·Â¿ë ¿Àµğ¿À ¼Ò½º
+    public AudioSource audioSource;
     public AudioClip[] clips;
 
-    private Coroutine talkRoutine = null;
+    // ===== Typewriter Settings =====
+    [Header("Typewriter")]
+    [Range(5f, 120f)] public float charsPerSecond = 35f;
+    public bool usePunctuationPause = true;
+    [Range(0f, 0.25f)] public float smallPause = 0.06f;   // , : ;
+    [Range(0f, 0.35f)] public float bigPause   = 0.16f;   // . ! ? â€¦
+
+    private Coroutine talkRoutine;
+    private Coroutine typeRoutine;
+    private bool isTyping;
+
+    void Awake()
+    {
+        // (ìƒ˜í”Œ ëŒ€ì‚¬ë“¤ ì´ˆê¸°í™”ëŠ” ë„¤ ì½”ë“œ ê·¸ëŒ€ë¡œ ë‘ )
+        // ... ìƒëµ ...
+    }
 
     void Start()
     {
         dialogueUI.SetActive(false);
-        // ´ëÈ­ Àü¿¡´Â ÅëÇà ±İÁö
         if (dialogueBlocker != null) dialogueBlocker.SetActive(true);
     }
 
-    /// <summary>
-    /// ¿ÜºÎ¿¡¼­ ½ºÅ×ÀÌÁö ¹øÈ£¸¦ Àü´Ş¹Ş¾Æ ´ëÈ­¸¦ ½ÃÀÛ
-    /// </summary>
     public void StartDialogue(int stageNumber)
     {
-        Debug.Log("StartDialogue ½ÇÇàµÊ : Stage " + stageNumber);
-
         dialogueIndex = 0;
         dialogueActive = true;
 
         dialogueUI.SetActive(true);
         cutsceneCamera.enabled = true;
         mainCamera.enabled = false;
+        if (variableJoystick != null) variableJoystick.SetActive(false);
+        if (promptOpenButton != null) promptOpenButton.SetActive(false);
 
-        //  ½ºÅ×ÀÌÁö ¹øÈ£¿¡ ¸Â´Â ´ëÈ­ ¼±ÅÃ
+        // ìŠ¤í…Œì´ì§€ì— ë§ì¶° ë°°ì—´ ì„ íƒ
         switch (stageNumber)
         {
             case 1: currentDialogues = dialogues1; break;
@@ -71,69 +80,103 @@ public class DialogueManager : MonoBehaviour
             default: currentDialogues = dialogues1; break;
         }
 
-        dialogueText.text = currentDialogues[dialogueIndex];
-
-        dialogueIndex = 0;
-        dialogueActive = true;
-
-        dialogueUI.SetActive(true);
-        cutsceneCamera.enabled = true;
-        mainCamera.enabled = false;
-        if (variableJoystick != null) variableJoystick.SetActive(false);
-        if (promptOpenButton != null) promptOpenButton.SetActive(false);
-
-        dialogueText.text = currentDialogues[dialogueIndex];
-        PlayDialogue();
+        // ì²« ì¤„ ì¶œë ¥ (íƒ€ìê¸° ì‹œì‘)
+        dialogueText.text = "";
+        StartTypewriter(currentDialogues[dialogueIndex]);
     }
 
-    public void PlayDialogue()
+    // ====== Typewriter ======
+    void StartTypewriter(string line)
     {
-        int idx = Random.Range(0, clips.Length);
-        audioSource.clip = clips[idx];
-        audioSource.Play();
-
-        if (talkRoutine != null)
-        {
-            StopCoroutine(talkRoutine);
-        }
-
-        // »õ ÄÚ·çÆ¾ ½ÃÀÛ
-        talkRoutine = StartCoroutine(TalkRoutine(audioSource.clip.length));
+        if (typeRoutine != null) StopCoroutine(typeRoutine);
+        typeRoutine = StartCoroutine(TypeRoutine(line));
     }
 
-    private IEnumerator TalkRoutine(float duration)
+    IEnumerator TypeRoutine(string line)
     {
+        isTyping = true;
+        dialogueText.text = "";
         lexyAnimator.SetBool("isTalking", true);
 
-        yield return new WaitForSeconds(duration);
+        // ë§ì†Œë¦¬: ê¸°ì¡´ì²˜ëŸ¼ ëœë¤ í´ë¦½ ì¬ìƒ (ì›í•˜ë©´ ë£¨í”„ SFXë¡œ êµì²´)
+        if (clips != null && clips.Length > 0)
+        {
+            int idx = Random.Range(0, clips.Length);
+            audioSource.clip = clips[idx];
+            audioSource.Play();
+        }
 
+        float delayPerChar = 1f / Mathf.Max(1f, charsPerSecond);
+
+        // ë¦¬ì¹˜í…ìŠ¤íŠ¸ íƒœê·¸ëŠ” ì¦‰ì‹œ ì²˜ë¦¬
+        int i = 0;
+        while (i < line.Length)
+        {
+            if (line[i] == '<') // tag ì‹œì‘
+            {
+                int close = line.IndexOf('>', i);
+                if (close == -1) close = i; // ë¹„ì •ìƒ ë°©ì–´
+                dialogueText.text += line.Substring(i, close - i + 1);
+                i = close + 1;
+                continue;
+            }
+
+            dialogueText.text += line[i];
+            i++;
+
+            // êµ¬ë‘ì  ì¼ì‹œì •ì§€
+            if (usePunctuationPause && i <= line.Length)
+            {
+                char c = line[i - 1];
+                if (c == '.' || c == '!' || c == '?' || c == 'â€¦')
+                    yield return new WaitForSeconds(bigPause);
+                else if (c == ',' || c == ';' || c == ':')
+                    yield return new WaitForSeconds(smallPause);
+                else
+                    yield return new WaitForSeconds(delayPerChar);
+            }
+            else
+            {
+                yield return new WaitForSeconds(delayPerChar);
+            }
+        }
+
+        // íƒ€ìê¸° ì™„ë£Œ
+        isTyping = false;
         lexyAnimator.SetBool("isTalking", false);
-        talkRoutine = null;
+        audioSource.Stop();
+        typeRoutine = null;
     }
 
+    /// <summary>
+    /// ë‹¤ìŒ ëŒ€ì‚¬. íƒ€ì´í•‘ ì¤‘ì´ë©´ ì¦‰ì‹œ ì™„ì„±ë§Œ í•¨.
+    /// </summary>
     public void NextDialogue()
     {
-        if (!dialogueActive || currentDialogues == null)
+        if (!dialogueActive || currentDialogues == null) return;
+
+        // íƒ€ì´í•‘ ì¤‘ì´ë©´ ì¤„ ì™„ì„±ë§Œ
+        if (isTyping)
         {
-            Debug.Log($"[NextDialogue] blocked. active={dialogueActive}, hasDialogues={(currentDialogues != null)}");
+            if (typeRoutine != null) StopCoroutine(typeRoutine);
+            dialogueText.text = currentDialogues[dialogueIndex];
+            isTyping = false;
+            lexyAnimator.SetBool("isTalking", false);
+            audioSource.Stop();
+            typeRoutine = null;
             return;
         }
 
-        //Debug.Log($"[NextDialogue] before: index={dialogueIndex}, len={currentDialogues.Length}");
-
-        // ¸¶Áö¸· ÁÙÀÌ¸é ¹Ù·Î Á¾·á
+        // ë§ˆì§€ë§‰ ì¤„ì´ë©´ ì¢…ë£Œ
         if (dialogueIndex >= currentDialogues.Length - 1)
         {
             EndDialogue();
             return;
         }
 
+        // ë‹¤ìŒ ì¤„ ì‹œì‘
         dialogueIndex++;
-        dialogueText.text = currentDialogues[dialogueIndex];
-
-        PlayDialogue();
-
-        //Debug.Log($"[NextDialogue] after: index={dialogueIndex}, len={currentDialogues.Length}");
+        StartTypewriter(currentDialogues[dialogueIndex]);
     }
 
     private void EndDialogue()
@@ -143,97 +186,22 @@ public class DialogueManager : MonoBehaviour
 
         cutsceneCamera.enabled = false;
         mainCamera.enabled = true;
+
+        if (typeRoutine != null) StopCoroutine(typeRoutine);
+        typeRoutine = null;
+        isTyping = false;
+
         audioSource.Stop();
         if (talkRoutine != null)
         {
             StopCoroutine(talkRoutine);
-            lexyAnimator.SetBool("isTalking", false);
             talkRoutine = null;
         }
+        lexyAnimator.SetBool("isTalking", false);
 
         if (variableJoystick != null) variableJoystick.SetActive(true);
         if (promptOpenButton != null) promptOpenButton.SetActive(true);
 
-        Debug.Log("´ëÈ­ Á¾·á");
-        // ´ëÈ­ ³¡³ª¸é ´Ù½Ã ÅëÇà Çã¿ë
         if (dialogueBlocker != null) dialogueBlocker.SetActive(false);
     }
-
-
-    void Awake()
-    {
-        dialogues1 = new string[]
-        {
-        "??? : ¿À.. ´«À» ¶¹±¸³ª.",
-        "??? : ÃàÇÏÇØ! µåµğ¾î °ü¸®ÀÚ ·Îº¿À¸·Î ½ÂÁøÀ» Çß±¸³ª.",
-        "·º½Ã : ³ª´Â ·º½Ã.",
-        "·º½Ã : ÀÌ °ø°£ÀÇ ÇÁ·ÒÇÁÆ® °¡ÀÌµåÀÌÀÚ, ³ÊÀÇ Ã¹ ¾÷¹«¸¦ µµ¿ÍÁÙ µµ¿ì¹Ì¾ß.",
-        "·º½Ã : ³Ê´Â ÀÌÁ¦ ´Ü¼øÈ÷ ¿òÁ÷ÀÌ´Â ·Îº¿ÀÌ ¾Æ´Ï¶ó, ¸í·ÉÀ» ³»¸®´Â ·Îº¿, Áï °ü¸®ÀÚ°¡ µÈ°Å¾ß.",
-        "·º½Ã : ÀÌ ±¸¿ª¿¡¼­´Â ¸ğµç µ¿·á ·Îº¿µéÀÌ ÀÚ¿¬¾î ¸í·É, Áï ¡®ÇÁ·ÒÇÁÆ®¡¯·Î ¿òÁ÷ÀÌÁö.",
-        "·º½Ã :¡®ÇÁ·ÒÇÁÆ®¡¯´Â ³×°¡ µ¿·á¿¡°Ô ³»¸®´Â ¿ì¸®¸» ¸í·ÉÀÌ¾ß.",
-        "·º½Ã : ¿ì¸®´Â ÄÚµå ´ë½Å ¸»·Î ¸í·ÉÀ» ³»¸®´Â Æ¯º°ÇÑ ¹æ½ÄÀ¸·Î ÀÛµ¿ÇØ.",
-        "·º½Ã : ¿¹¸¦ µé¾î, ÀÌ·¸°Ô ¸»ÇÏ¸é µÅ. ¡±¿À¸¥ÂÊÀ¸·Î 3Ä­ ¿òÁ÷¿©¡±",
-        "·º½Ã : ±×·¯¸é µ¿·á ·Îº¿Àº ³× ¸»À» ÀÌÇØÇÏ°í Á¤È®È÷ ¿À¸¥ÂÊÀ¸·Î ¼¼ Ä­ ÀÌµ¿ÇÏ°Ô µÅ.",
-        "·º½Ã : Áß¿äÇÑ °Ç, ³× ¸»ÀÌ ¸íÈ®ÇÏ°í ±¸Ã¼ÀûÀÌ¾î¾ß ÇÑ´Ù´Â °Å¾ß.",
-        "·º½Ã : ¸»ÀÌ ¸ğÈ£ÇÏ°Å³ª ÀÌ»óÇÏ¸é, µ¿·á ·Îº¿Àº Çò°¥¸± ¼ö ÀÖ¾î.",
-        "·º½Ã : Áö±İºÎÅÍ ³Ê´Â °ü¸®ÀÚ ·Îº¿À¸·Î¼­, »óÈ²À» ÆÄ¾ÇÇÏ°í ÇÁ·ÒÇÁÆ®·Î Á¤È®ÇÑ Áö½Ã¸¦ ³»·Á ÀÓ¹«¸¦ ÇØ°áÇØ¾ß ÇØ.",
-        "·º½Ã : ÇÏÁö¸¸ °ÆÁ¤ ¸¶! Ã³À½Àº ´©±¸³ª ¼­Åø±â ¸¶·ÃÀÌ´Ï±î.",
-        "·º½Ã : ³»°¡ ¿·¿¡¼­ ÇÏ³ª¾¿ Â÷±ÙÂ÷±Ù ¾Ë·ÁÁÙ°Ô.",
-        "·º½Ã : È­¸é ÁÂÃø »ó´Ü¿¡ ÀÖ´Â°Ç È¨¹öÆ°ÀÌ¾ß. ´©¸£¸é ½ºÅ×ÀÌÁö ¼±ÅÃ ¸Ş´º·Î µ¹¾Æ°¥ ¼ö ÀÖ¾î.",
-        "·º½Ã : ÀÌ°÷±îÁö °É¾î¿ÔÀ¸´Ï ¾Ë°ÚÁö¸¸, Á¶ÀÌ½ºÆ½À» ÅëÇØ Á÷Á¢ ¿òÁ÷ÀÌ¸é¼­ ¸ÊÀ» µÑ·¯º¼ ¼ö ÀÖ¾î.",
-        "·º½Ã : ÀÌÁ¦ ÇÁ·ÒÇÁÆ®·Î µ¿·á ·Îº¿¿¡°Ô ¸í·ÉÀ» ³»·Áº¼ Â÷·Ê¾ß.",
-        "·º½Ã : È­¸é ¿À¸¥ÂÊÀÇ È­»ìÇ¥¸¦ ´©¸£°í ÀÔ·Â Ä­¿¡ ´ÙÀ½°ú °°ÀÌ ÀÔ·ÂÇØºÁ. '¿À¸¥ÂÊÀ¸·Î 3Ä­ ¿òÁ÷¿©.'"
-        };
-
-        dialogues2 = new string[]
-        {
-        "·º½Ã : ¾î¼­¿Í! ´Ù½Ã ¸¸³ª¼­ ¹İ°¡¿ö!",
-        "·º½Ã : ÀÌÁ¦ º»°İÀûÀÎ ¸í·É¾î¸¦ ´õ ¹è¿öº¼ Â÷·Ê¾ß.",
-        "·º½Ã : ÀÌ¹ø¿£ µ¿·á ·Îº¿¿¡°Ô ¹°°ÇÀ» Áİµµ·Ï ¸í·ÉÇØº¼°Å¾ß.",
-        "·º½Ã : ·Îº¿Àº ´Ü¼øÈ÷ ¿òÁ÷ÀÌ´Â °Í»Ó¸¸ ¾Æ´Ï¶ó, »óÈ£ÀÛ¿ëµµ ÇÒ ¼ö ÀÖ¾î.",
-        "·º½Ã : ¿¹¸¦ µé¾î, ÀÌ·¸°Ô ¸» ÇÒ ¼ö ÀÖ¾î. 'Áö±İ ÀÚ¸®¿¡ ÀÖ´Â ¹°°ÇÀ» ÁÖ¿ö'",
-        "·º½Ã : ±×·¯¸é ·Îº¿Àº ¹Ù´Ú¿¡ ³õ¿©ÀÖ´Â ¹°°ÇÀ» Áı¾î µé¾î¼­ ¼ÒÁöÇÏ°Ô µÅ.",
-        "·º½Ã : ÀÌÃ³·³ ¡®Áİ´Ù¡¯,¡®Áı´Ù¡¯,¡®µé´Ù' °°Àº Ç¥Çöµµ ¾Ë¾ÆµéÀ» ¼ö ÀÖ¾î. ÇÏÁö¸¸, ¸»ÀÌ ¸ğÈ£ÇÏ¸é ¿ÀÀÛµ¿ÇÒ ¼ö ÀÖÀ¸´Ï, °£°áÇÏ°í ¸íÈ®ÇÏ°Ô ¸»ÇÏ´Â °Ô ÁÁ¾Æ.",
-        "·º½Ã : ÀÚ ±×·³, ¿¬½ÀÇØº¸ÀÚ. ¹°°ÇÀÌ ³õ¿©ÀÖ´Â Ä­±îÁö ÀÌµ¿ÇÑ ÈÄ¿¡, Áİ´Â°Å¾ß."
-        };
-
-        dialogues3 = new string[]
-        {
-        "·º½Ã : ÀÏÀº ¾î¶§?",
-        "·º½Ã : ÀÌÁ¦ ²Ï ÀÍ¼÷ÇØÁ³Áö?",
-        "·º½Ã : ÀÌ¹ø¿£ ¹°°ÇÀ» ¿Å±â´Â ¹Ì¼ÇÀÌ¾ß.",
-        "·º½Ã : ·Îº¿ÀÌ Áİ´Â °Í±îÁø ¹è¿üÁö?",
-        "·º½Ã : ÀÌÁ¦´Â Áİ°í ³­ ´ÙÀ½¿¡ ¾îµğ¿¡ µÑÁö±îÁö ¸í·ÉÇØ¾ß ÇØ.",
-        "·º½Ã : Áß¿äÇÑ °Ç, ¡°¹«¾ùÀ» ÇÏ°í -> ¾îµğ·Î °¡¼­ -> ¾î¶² Çàµ¿À» ÇÏ´ÂÁö¡± ¼ø¼­´ë·Î Á¤È®È÷ ¸»ÇÏ´Â °Å¾ß.",
-        "·º½Ã : ÀÚ, Á÷Á¢ ÇØº¼±î?",
-        "·º½Ã : ·Îº¿ÀÌ Àú ºÎÇ°À» µé¾î¼­, ¹Ù±¸´Ï À§Ä¡¿¡ ³õµµ·Ï ¸í·ÉÇØº¸´Â °Å¾ß."
-        };
-        dialogues4 = new string[]
-        {
-        "·º½Ã : ¿©±â±îÁö Àß µû¶ó¿À°í ÀÖ¾î!",
-        "·º½Ã : ÀÌ¹ø¿£ °ü¸®ÀÚ·Îº¿´Ù¿î ¸í·É ¹æ½ÄÀ» ¹è¿öº¼ Â÷·Ê¾ß.",
-        "·º½Ã : Áö±İ º¸ÀÌ´Â ÀÌ ·Îº¿µé, ÀüºÎ ³× µ¿·á¾ß.",
-        "·º½Ã : ÇÏÁö¸¸¡¦ ÇÏ³ª¾¿ ¸í·ÉÀ» ³»·Á¼­ ¿òÁ÷ÀÎ´Ù¸é?",
-        "·º½Ã : Ã¹ ¹øÂ° ·Îº¿, ¾Æ·¡·Î µÎ Ä­ °¡. µÎ ¹øÂ° ·Îº¿, ³Êµµ ¾Æ·¡·Î µÎ Ä­ °¡. ¼¼ ¹øÂ° ·Îº¿ ³Êµµ¡¦",
-        "·º½Ã : ÀÌ·¸°Ô ÇÏ¸é ½Ã°£µµ ¿À·¡ °É¸®°í ½Ç¼öµµ ¸¹¾ÆÁö°ÚÁö?",
-        "·º½Ã : ±×·¡¼­ °ü¸®ÀÚ ·Îº¿Àº ´Ş¶ó.",
-        "·º½Ã : ÇÏ³ªÀÇ ¸í·ÉÀ¸·Î ¸ğµç ·Îº¿¿¡°Ô µ¿½Ã¿¡ Áö½ÃÇÒ ¼ö ÀÖ¾î.",
-        "·º½Ã : ¸ğµç µ¿·á ·Îº¿Àº ±× ¸í·ÉÀ» ÀÚ±â À§Ä¡¿¡ ¸ÂÃç ½º½º·Î ÇØ¼®ÇÏ°í °°Àº ½ÃÁ¡¿¡ ÀÌµ¿ÇØ.",
-        "·º½Ã : ÀÌÁ¦ºÎÅÍ´Â ÇÏ³ªÀÇ ¸í·ÉÀ¸·Î ÆÀ ÀüÃ¼¸¦ ¿òÁ÷ÀÏ ¼ö ÀÖ¾î¾ß ÇØ.",
-        "·º½Ã : ÀÌÁ¦¾ß Á» °ü¸®ÀÚ´äÁö?",
-        "·º½Ã : ¸ğµç ·Îº¿ÀÌ Àú ºÎÇ°À» µéµµ·Ï ¸í·ÉÇØº¸´Â °Å¾ß."
-        };
-        dialogues5 = new string[]
-        {
-        "·º½Ã : ÁÁ¾Æ, °ü¸®ÀÚ ·Îº¿.",
-        "·º½Ã : ÀÌ¹ø¿£ Á¶±İ ±î´Ù·Î¿ö.",
-        "·º½Ã : ÀÌ ±¸¿ª¿£¡¦ ³¶¶°·¯Áö°¡ ÀÖ¾î.",
-        "·º½Ã : ±×´ë·Î ÀüÁøÇß´Ù°£ Ãß¶ôÇØ¼­ ·Îº¿ÀÌ ¼Õ»óµÉ ¼öµµ ÀÖ¾î.",
-        "·º½Ã : ÇÏÁö¸¸ ¶Ç ¾î¶² ·Îº¿Àº ¾ÕÀÌ ÆòÁö¶ó¼­ ¿òÁ÷¿©µµ ±¦ÂúÁö.",
-        "·º½Ã : ±×·¯´Ï±î, Áö±İ ÇÊ¿äÇÑ °ÍÀº Á¶°Ç¿¡ µû¶ó ´Ù¸£°Ô ¿òÁ÷ÀÌ´Â ¸í·ÉÀÌ¾ß.",
-        "·º½Ã : °ü¸®ÀÚ ·Îº¿ÀÌ¶ó¸é, ÀÌ Á¤µµ »óÈ² ÆÇ´Ü ´É·Âµµ ¸í·É ¾È¿¡ ´ãÀ» ¼ö ÀÖ¾î¾ß ÇÏ°ÚÁö?",
-        "·º½Ã : ·Îº¿µéÀÌ ÁÖº¯À» »ìÇÇ°í, Æ÷Å»±îÁö ¾ÈÀüÇÏ°Ô ÀÌµ¿ÇÒ ¼ö ÀÖµµ·Ï Áö½ÃÇØÁà.",
-        };
-    }
 }
-
