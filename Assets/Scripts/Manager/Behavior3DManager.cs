@@ -6,7 +6,6 @@ using UnityEngine;
 
 public class Behavior3DManager : MonoBehaviour
 {
-    public Transform[] player_transform;
     public float moveSpeed = 3.5f;  // 초당 이동 속도
     public float moveDistance = 5f;  // 한 번 이동 시 거리
     public Piece3DManager pieceManager;
@@ -14,7 +13,7 @@ public class Behavior3DManager : MonoBehaviour
     public AudioClip footstepClip;     // 발소리 1개
     public AudioClip pickClip;       // 집기 사운드
     public AudioClip dropClip;       // 내려놓기 사운드
-    public float stepStride = 1.2f;    // 한 발 디딜 때 이동거리(미터) 기준
+    public float stepStride = 1.2f;    // 한 발 디딜 때 이동거리(미터) 
 
     private Vector3[] target_t;
     public bool isMoving = false;
@@ -24,21 +23,32 @@ public class Behavior3DManager : MonoBehaviour
     private AudioSource[] footstepSources;
     private float[] stepMeters;        // 플레이어별 누적 이동거리
 
+    // 시작 포즈 저장(Reset용)
+    private Vector3[] startPos;
+    private Quaternion[] startRot;
+    private uint _epoch = 0; //리셋을 위한 토큰
+    public void BumpEpoch() => _epoch++;  // 리셋 시 호출
+
+    // 일시정지 플래그
+    private bool paused = false;
+    public bool IsPaused => paused;
+    public bool IsMoving => isMoving;
+
     void Start()
     {
         // 각 player_transform에 연결된 Animator를 가져옴
-        animators = new Animator[player_transform.Length];
-        heldPiece = new GameObject[player_transform.Length];
+        animators = new Animator[SceneHubManager.I.roadTs.Length];
+        heldPiece = new GameObject[SceneHubManager.I.roadTs.Length];
 
-        footstepSources = new AudioSource[player_transform.Length];
-        stepMeters = new float[player_transform.Length];
+        footstepSources = new AudioSource[SceneHubManager.I.roadTs.Length];
+        stepMeters = new float[SceneHubManager.I.roadTs.Length];
 
-        for (int i = 0; i < player_transform.Length; ++i)
+        for (int i = 0; i < SceneHubManager.I.roadTs.Length; ++i)
         {
-            animators[i] = player_transform[i].GetComponent<Animator>();
+            animators[i] = SceneHubManager.I.roadTs[i].GetComponent<Animator>();
 
-            var src = player_transform[i].GetComponent<AudioSource>();
-            if (src == null) src = player_transform[i].gameObject.AddComponent<AudioSource>();
+            var src = SceneHubManager.I.roadTs[i].GetComponent<AudioSource>();
+            if (src == null) src = SceneHubManager.I.roadTs[i].gameObject.AddComponent<AudioSource>();
             src.playOnAwake = false;
             src.dopplerLevel = 0f;
             src.spatialBlend = 0f; // 2D로 들리게 (원하면 3D로 바꿔도 됨)
@@ -46,11 +56,19 @@ public class Behavior3DManager : MonoBehaviour
 
             stepMeters[i] = 0f;
         }
+        //시작 포즈 저장, ResetAllToStartPose을 위한 용도
+        startPos = new Vector3[SceneHubManager.I.roadTs.Length];
+        startRot = new Quaternion[SceneHubManager.I.roadTs.Length];
+        for (int i = 0; i < SceneHubManager.I.roadTs.Length; ++i)
+        {
+            startPos[i] = SceneHubManager.I.roadTs[i].position;
+            startRot[i] = SceneHubManager.I.roadTs[i].rotation;
+        }
     }
 
     public bool checkHeld()
     {
-        for (int i = 0; i < player_transform.Length; ++i)
+        for (int i = 0; i < SceneHubManager.I.roadTs.Length; ++i)
         {
             if (heldPiece[i] == null)
                 return false;
@@ -60,11 +78,11 @@ public class Behavior3DManager : MonoBehaviour
 
     public void clearHeld()
     {
-        for(int i = 0;i < player_transform.Length; i++)
+        for (int i = 0; i < SceneHubManager.I.roadTs.Length; i++)
         {
             if (heldPiece[i] != null)
             {
-                heldPiece[i].transform.SetParent(player_transform[i].parent);
+                heldPiece[i].transform.SetParent(SceneHubManager.I.roadTs[i].parent);
                 heldPiece[i] = null;
                 animators[i].SetTrigger("Drop");
                 animators[i].SetBool("Having", false);
@@ -74,12 +92,12 @@ public class Behavior3DManager : MonoBehaviour
 
     public bool[] GetSearch(int dir)
     {
-        bool[] search = new bool[player_transform.Length];
+        bool[] search = new bool[SceneHubManager.I.roadTs.Length];
 
         // 각 플레이어별로 검사
-        for (int i = 0; i < player_transform.Length; i++)
+        for (int i = 0; i < SceneHubManager.I.roadTs.Length; i++)
         {
-            Vector3 origin = player_transform[i].position;
+            Vector3 origin = SceneHubManager.I.roadTs[i].position;
             Vector3 direction = Vector3.zero;
 
             // dir에 따라 방향 설정
@@ -125,33 +143,46 @@ public class Behavior3DManager : MonoBehaviour
 
     IEnumerator SmoothMove(Vector3[] destination, bool[] conditions)
     {
+        uint myEpoch = _epoch;
         isMoving = true;
 
-        while (!player_transform.Select((t, i) =>
+        if (myEpoch != _epoch) { isMoving = false; yield break; } // 루프 전 epoch 체크
+
+        while (!SceneHubManager.I.roadTs.Select((t, i) =>
         // 조건이 false면 "이미 완료"로 간주 → true 반환
         (conditions == null || !conditions[i]) || Vector3.Distance(t.position, destination[i]) < 0.01f
     )
     .All(b => b))
         {
-            for (int i = 0; i < player_transform.Length; ++i)
+            if (myEpoch != _epoch) { isMoving = false; yield break; } //리셋 되었으면 즉시 종료
+            if (paused)
             {
-                if (conditions != null && !conditions[i]) continue;
+                // 애니 정지값 보정
+                for (int k = 0; k < SceneHubManager.I.roadTs.Length; ++k)
+                    if (animators[k] != null) animators[k].SetFloat("Speed", 0f);
 
-                Vector3 beforePos = player_transform[i].position; // 이동 전 위치
+                yield return null;
+                continue;
+            }
+            
+            for (int i = 0; i < SceneHubManager.I.roadTs.Length; ++i)
+            {
+                if (conditions != null && (i >= conditions.Length || !conditions[i])) continue;
 
+                Vector3 beforePos = SceneHubManager.I.roadTs[i].position; // 이동 전 위치
                 Vector3 direction = destination[i] - beforePos;
 
                 if (direction.sqrMagnitude > 0.001f)
                 {
                     Quaternion targetRotation = Quaternion.LookRotation(direction, Vector3.up);
-                    player_transform[i].rotation = Quaternion.Slerp(player_transform[i].rotation, targetRotation, Time.deltaTime * 10f);
+                    SceneHubManager.I.roadTs[i].rotation = Quaternion.Slerp(SceneHubManager.I.roadTs[i].rotation, targetRotation, Time.deltaTime * 10f);
                 }
 
                 // 실제 이동
                 float step = moveSpeed * Time.deltaTime;
                 Vector3 newPosition = Vector3.MoveTowards(beforePos, destination[i], step);
                 float moved = (newPosition - beforePos).magnitude;      // 이번 프레임 이동 거리
-                player_transform[i].position = newPosition;
+                SceneHubManager.I.roadTs[i].position = newPosition;
 
                 // 애니메이션 Speed
                 float actualSpeed = moved / Mathf.Max(Time.deltaTime, 1e-6f);
@@ -174,7 +205,7 @@ public class Behavior3DManager : MonoBehaviour
         }
 
         // 도착 후 Speed = 0으로 설정
-        for (int i = 0; i < player_transform.Length; ++i)
+        for (int i = 0; i < SceneHubManager.I.roadTs.Length; ++i)
         {
             if (animators[i] != null)
                 animators[i].SetFloat("Speed", 0f);
@@ -185,13 +216,15 @@ public class Behavior3DManager : MonoBehaviour
 
     IEnumerator MovePieceToHand(Transform target, Vector3 targetLocalPosition, float duration = 0.5f, float delay = 0.5f)
     {
+        uint myEpoch = _epoch; //리셋 체크용
         yield return new WaitForSeconds(delay);
 
         Vector3 startLocalPos = target.localPosition;
         float elapsed = 0f;
-
         while (elapsed < duration)
         {
+            if (myEpoch != _epoch) yield break; //리셋 되었으면 즉시 종료
+            if (paused) { yield return null; continue; }
             elapsed += Time.deltaTime;
             float t = Mathf.Clamp01(elapsed / duration);
             target.localPosition = Vector3.Lerp(startLocalPos, targetLocalPosition, t);
@@ -203,11 +236,13 @@ public class Behavior3DManager : MonoBehaviour
 
     IEnumerator DropPieceSmoothly(Transform pieceTransform, Vector3 targetWorldPosition, float duration = 0.5f)
     {
+        uint myEpoch = _epoch; //리셋 체크용
         Vector3 startPos = pieceTransform.position;
         float elapsed = 0f;
-
-        while (elapsed < duration)
+       while (elapsed < duration)
         {
+            if (myEpoch != _epoch) yield break; //리셋 되었으면 즉시 종료
+            if (paused) { yield return null; continue; }
             elapsed += Time.deltaTime;
             float t = Mathf.Clamp01(elapsed / duration);
             pieceTransform.position = Vector3.Lerp(startPos, targetWorldPosition, t);
@@ -219,39 +254,39 @@ public class Behavior3DManager : MonoBehaviour
 
     public void Up(bool[] conditions = null)
     {
-        if (isMoving) return;
+        if (paused || isMoving) return;
         GameData.moveCount++;
-        target_t = player_transform.Select(t => t.position + Vector3.forward * moveDistance).ToArray();
+        target_t = SceneHubManager.I.roadTs.Select(t => t.position + Vector3.forward * moveDistance).ToArray();
         StartCoroutine(SmoothMove(target_t, conditions));
     }
 
     public void Down(bool[] conditions = null)
     {
-        if (isMoving) return;
+        if (paused || isMoving) return;
         GameData.moveCount++;
-        target_t = player_transform.Select(t => t.position + Vector3.back * moveDistance).ToArray();
+        target_t = SceneHubManager.I.roadTs.Select(t => t.position + Vector3.back * moveDistance).ToArray();
         StartCoroutine(SmoothMove(target_t, conditions));
     }
 
     public void Left(bool[] conditions = null)
     {
-        if (isMoving) return;
+        if (paused || isMoving) return;
         GameData.moveCount++;
-        target_t = player_transform.Select(t => t.position + Vector3.left * moveDistance).ToArray();
+        target_t = SceneHubManager.I.roadTs.Select(t => t.position + Vector3.left * moveDistance).ToArray();
         StartCoroutine(SmoothMove(target_t, conditions));
     }
 
     public void Right(bool[] conditions = null)
     {
-        if (isMoving) return;
+        if (paused || isMoving) return;
         GameData.moveCount++;
-        target_t = player_transform.Select(t => t.position + Vector3.right * moveDistance).ToArray();
+        target_t = SceneHubManager.I.roadTs.Select(t => t.position + Vector3.right * moveDistance).ToArray();
         StartCoroutine(SmoothMove(target_t, conditions));
     }
 
     public void Pick(bool[] conditions = null)
     {
-        if (isMoving) return;
+        if (paused || isMoving) return;
         GameData.moveCount++;
         StartCoroutine(PickRoutine(conditions));
     }
@@ -261,7 +296,7 @@ public class Behavior3DManager : MonoBehaviour
         isMoving = true;
         List<Coroutine> coroutines = new List<Coroutine>();
 
-        for (int i = 0; i < player_transform.Length; ++i)
+        for (int i = 0; i < SceneHubManager.I.roadTs.Length; ++i)
         {
             if (conditions != null && !conditions[i]) continue;
             if (animators[i] != null && heldPiece[i] == null)
@@ -271,10 +306,10 @@ public class Behavior3DManager : MonoBehaviour
                 if (pickClip && footstepSources[i])
                     footstepSources[i].PlayOneShot(pickClip);
 
-                GameObject nearest = pieceManager.GetNearestAvailablePiece(player_transform[i].position, 1.0f);
+                GameObject nearest = pieceManager.GetNearestAvailablePiece(SceneHubManager.I.roadTs[i].position, 1.0f);
                 if (nearest != null)
                 {
-                    nearest.transform.SetParent(player_transform[i]);
+                    nearest.transform.SetParent(SceneHubManager.I.roadTs[i]);
                     animators[i].SetBool("Having", true);
                     heldPiece[i] = nearest;
 
@@ -295,7 +330,7 @@ public class Behavior3DManager : MonoBehaviour
 
     public void Drop(bool[] conditions = null)
     {
-        if (isMoving) return;
+        if (paused || isMoving) return;
         GameData.moveCount++;
         StartCoroutine(DropRoutine(conditions));
     }
@@ -305,13 +340,13 @@ public class Behavior3DManager : MonoBehaviour
         isMoving = true;
         List<Coroutine> coroutines = new List<Coroutine>();
 
-        for (int i = 0; i < player_transform.Length; ++i)
+        for (int i = 0; i < SceneHubManager.I.roadTs.Length; ++i)
         {
             if (conditions != null && !conditions[i]) continue;
             if (animators[i] != null && heldPiece[i] != null)
             {
                 GameObject piece = heldPiece[i];
-                piece.transform.SetParent(player_transform[i].parent);
+                piece.transform.SetParent(SceneHubManager.I.roadTs[i].parent);
 
                 animators[i].SetTrigger("Drop");
                 if (dropClip && footstepSources[i])
@@ -323,7 +358,7 @@ public class Behavior3DManager : MonoBehaviour
                 coroutines.Add(StartCoroutine(
                     DropPieceSmoothly(
                         piece.transform,
-                        player_transform[i].position + new Vector3(0f, -0.8f, 0f),
+                        SceneHubManager.I.roadTs[i].position + new Vector3(0f, -0.8f, 0f),
                         0.5f
                     )
                 ));
@@ -336,4 +371,57 @@ public class Behavior3DManager : MonoBehaviour
 
         isMoving = false;
     }
+
+    public void PauseLogical(bool pause)
+    {
+        paused = pause;
+
+        // 보이는/듣는 것 모두 멈춘 감각 제공
+        for (int i = 0; i < SceneHubManager.I.roadTs.Length; ++i)
+        {
+            if (animators[i]) animators[i].SetFloat("Speed", 0f);
+            if (footstepSources[i]) footstepSources[i].Stop();
+
+            var rb = SceneHubManager.I.roadTs[i].GetComponent<Rigidbody>();
+            if (rb) { rb.velocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
+        }
+    }
+
+    // Hard stop: 진행 중 코루틴 모두 끊고 상태 초기화
+    public void HardStopAll()
+    {
+        // 새로운 epoch 발급 → 기존에 돌던 모든 코루틴은 스스로 종료하게 됨
+        BumpEpoch();
+        // 진행 중인 모든 이동/보간/집기/드랍 코루틴 즉시 중단
+        StopAllCoroutines();
+        isMoving = false;
+
+        // 애니/사운드/물리 속도 0으로
+        for (int i = 0; i < SceneHubManager.I.roadTs.Length; ++i)
+        {
+            if (animators[i]) animators[i].SetFloat("Speed", 0f);
+            if (footstepSources[i]) footstepSources[i].Stop();
+
+            var rb = SceneHubManager.I.roadTs[i].GetComponent<Rigidbody>();
+            if (rb)
+            {
+                rb.velocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+            }
+        }
+        target_t = null;
+        for (int i = 0; i < stepMeters.Length; ++i) stepMeters[i] = 0f;
+    }
+
+    // 시작 포즈로 복귀(손에 든 것 내려놓기 포함)
+    public void ResetAllToStartPose()
+    {
+        clearHeld(); // 트리거/애니 포함 내려놓기(즉시형이 필요하면 별도 헬퍼 만들어도 됨)
+        for (int i = 0; i < SceneHubManager.I.roadTs.Length; ++i)
+        {
+            SceneHubManager.I.roadTs[i].position = startPos[i];
+            SceneHubManager.I.roadTs[i].rotation = startRot[i];
+        }
+    }
+    
 }

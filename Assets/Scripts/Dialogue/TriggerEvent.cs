@@ -3,21 +3,12 @@ using System.Collections;
 
 public class TriggerEvent : MonoBehaviour
 {
-    [Header("Camera Settings")]
-    public Camera mainCamera;        // 기본 카메라
-    public Camera cutsceneCamera;    // 연출용 카메라
-
     [Header("Character Settings")]
-    public Transform lexy;           // 렉시 캐릭터
-    public Transform lexyTargetPos;  // 렉시가 이동할 목표 위치
     public float moveSpeed = 4.0f;
-    public Animator lexyAnimator;
 
     [Header("Dialogue Settings")]
-    public GameObject dialogueUI;            // 대화 UI 오브젝트
     public DialogueManager dialogueManager;  // DialogueManager 참조
 
-    public int stageNumber = 1; // 이 트리거가 실행할 스테이지 번호를 Inspector에서 지정
     private bool eventStarted = false;
     private bool lexyMoving = false;
 
@@ -32,8 +23,7 @@ public class TriggerEvent : MonoBehaviour
             eventStarted = true;
 
             // 카메라 전환
-            if (mainCamera != null) mainCamera.enabled = false;
-            if (cutsceneCamera != null) cutsceneCamera.enabled = true;
+            dialogueManager.SetMainCamera(false);
 
             // 렉시 이동 시작
             lexyMoving = true;
@@ -43,7 +33,7 @@ public class TriggerEvent : MonoBehaviour
 
     private void Update()
     {
-        if (lexyMoving && lexy != null && lexyTargetPos != null && !isMovingCoroutineRunning)
+        if (lexyMoving && SceneHubManager.I.charLexyT != null && SceneHubManager.I.lexyTargetPosT != null && !isMovingCoroutineRunning)
         {
             // 이동을 시작할 때 단 한번 코루틴 실행
             StartCoroutine(StartMoveAfterDelay());
@@ -55,48 +45,49 @@ public class TriggerEvent : MonoBehaviour
         isMovingCoroutineRunning = true;
 
         // 애니메이션 Speed 켜기
-        lexyAnimator.SetFloat("Speed", moveSpeed);
+        SceneHubManager.I.lexyAnimator.SetFloat("Speed", moveSpeed);
 
         // 0.25초 기다림
         yield return new WaitForSeconds(0.25f);
 
         // 이제부터는 매 프레임 이동
-        while (lexyMoving && lexy != null && lexyTargetPos != null)
+        while (lexyMoving && SceneHubManager.I.charLexyT != null && SceneHubManager.I.lexyTargetPosT != null)
         {
-            lexy.position = Vector3.MoveTowards(
-                lexy.position,
-                lexyTargetPos.position,
+            SceneHubManager.I.charLexyT.position = Vector3.MoveTowards(
+                SceneHubManager.I.charLexyT.position,
+                SceneHubManager.I.lexyTargetPosT.position,
                 moveSpeed * Time.deltaTime
             );
 
             // 도착 판정
-            if (Vector3.Distance(lexy.position, lexyTargetPos.position) < 0.1f)
+            if (Vector3.Distance(SceneHubManager.I.charLexyT.position, SceneHubManager.I.lexyTargetPosT.position) < 0.1f)
             {
-                lexyAnimator.SetFloat("Speed", 0f);
-                lexy.position = lexyTargetPos.position;
+                SceneHubManager.I.lexyAnimator.SetFloat("Speed", 0f);
+                SceneHubManager.I.charLexyT.position = SceneHubManager.I.lexyTargetPosT.position;
                 lexyMoving = false;
                 isMovingCoroutineRunning = false;
 
                 Debug.Log("렉시 도착, 대화 시작!");
 
-                if (dialogueUI != null)
-                    dialogueUI.SetActive(true);
-                if (dialogueManager != null)
-                    dialogueManager.StartDialogue(stageNumber);
-                FindObjectOfType<DialogueManager>().StartDialogue(stageNumber);
+                dialogueManager.StartDialogue(TransStageToNumber());
             }
 
             yield return null; // 다음 프레임까지 대기
         }
     }
 
-    // 컷신/대화 종료
-    public void EndCutscene()
+    private int TransStageToNumber()
     {
-        if (mainCamera != null) mainCamera.enabled = true;
-        if (cutsceneCamera != null) cutsceneCamera.enabled = false;
+        if (string.IsNullOrEmpty(GameData.recentStage))
+            return 0;
 
-        if (dialogueUI != null)
-            dialogueUI.SetActive(false);
+        // 예: "A3" → "3"
+        string numberPart = GameData.recentStage.Substring(1);
+
+        if (int.TryParse(numberPart, out int result))
+            return result;
+
+        return 0;
     }
+
 }

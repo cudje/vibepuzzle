@@ -5,12 +5,10 @@ using UnityEngine;
 
 public class Piece3DManager : MonoBehaviour
 {
-    public GameObject[] allPieces;
-
     // 가장 가까운 piece 반환 (Pick용)
     public GameObject GetNearestAvailablePiece(Vector3 position, float radius = 1.0f)
     {
-        foreach (GameObject piece in allPieces)
+        foreach (GameObject piece in SceneHubManager.I.pieces)
         {
             if (piece == null) continue;
 

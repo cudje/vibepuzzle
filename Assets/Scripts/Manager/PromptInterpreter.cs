@@ -13,13 +13,21 @@ b_move(1)";
     public Behavior3DManager behavior;
     public Clear3DConditionManager condition;
 
+
     // 파싱/if 상태
     private string[] split_monjang;
     private bool[] executeRobo;
+    private Coroutine _scriptCo;
+
+    private bool _paused;
+    public bool IsPaused => _paused;
+    public bool IsIdle => _scriptCo == null;             // 코루틴 없음
+    public bool IsRunning => _scriptCo != null && !_paused;
+    public System.Action OnScriptStarted;
 
     private void Start()
     {
-        executeRobo = new bool[behavior.player_transform.Length];
+        executeRobo = new bool[SceneHubManager.I.roadTs.Length];
         clearExe();
         changePrompt(test);
         // funsion_start();
@@ -56,14 +64,38 @@ b_move(1)";
         split_monjang = prompt.Replace("\r", "").Split('\n');
     }
 
+    public void StartScriptFromBeginning()
+    {
+        StopScript(); // 혹시 돌고 있으면 중지
+        _scriptCo = StartCoroutine(RunScriptSequential());
+    }
+
+    public void StopScript()
+    {
+        if (_scriptCo != null)
+        {
+            StopCoroutine(_scriptCo);
+            _scriptCo = null;
+        }
+    }
+    // 추가: Pause/Resume API, InteractManager에서 호출
+    public void PauseScript(bool pause)
+    {
+        _paused = pause;
+        behavior?.PauseLogical(pause); // 내부 이동/행동도 멈추거나 풀기
+    }
+
+    public void TogglePause() => PauseScript(!_paused);
+
+
     // 외부에서 호출하는 진입점
     public void fusion_start(string prompt = null)
     {
         if (prompt != null) changePrompt(prompt);
 
         GameData.setCount();
-        StopAllCoroutines(); // 이전 실행 중지
-        StartCoroutine(RunScriptSequential());
+        StartScriptFromBeginning();
+        OnScriptStarted?.Invoke(); //버튼 활성화를 위함
     }
 
     // 스크립트를 "순차적으로" 실행
@@ -71,6 +103,7 @@ b_move(1)";
     {
         foreach (string raw in split_monjang)
         {
+            yield return new WaitWhile(() => _paused);
             bool clearCon = false;
             if (!raw.StartsWith("    ")) {
                 clearCon = true;
@@ -93,17 +126,19 @@ b_move(1)";
             }
 
             // 일반 명령 한 줄을 끝까지 실행할 때까지 기다림
-            if (clearCon)
-            {
-                clearExe();
-            }
+            if (clearCon) clearExe();
+
+            yield return new WaitWhile(() => _paused);
             yield return ExecuteLine(line);
+            yield return new WaitWhile(() => _paused);
         }
 
         // 모든 줄 처리 이후, 남은 움직임까지 끝난 다음 클리어 체크
         yield return new WaitUntil(() => behavior != null && !behavior.isMoving);
+        yield return new WaitWhile(() => _paused);
         if (condition != null)
             condition.CheckClear();
+        _scriptCo = null;
     }
 
     private void InvertExecuteRobo()
@@ -150,6 +185,7 @@ b_move(1)";
     private IEnumerator ExecuteLine(string line)
     {
         if (string.IsNullOrWhiteSpace(line)) yield break;
+        yield return new WaitWhile(() => _paused);
 
         // 객체 조작 우선
         if (line[0] == 'h') // hold/pick
@@ -200,9 +236,12 @@ b_move(1)";
     // 동작(픽/드랍 등) 1회: 이전 동작 종료 대기 → 한 틱 양보 → 실행 → 종료 대기
     private IEnumerator ActWithWait(Action act)
     {
+        yield return new WaitWhile(() => _paused);
         yield return new WaitUntil(() => behavior != null && !behavior.isMoving);
         yield return null; // 프레임 경계 넘겨 isMoving 반영 기회 제공
         act?.Invoke();
+            
+        yield return new WaitWhile(() => _paused);
         yield return new WaitUntil(() => behavior != null && !behavior.isMoving);
     }
 
@@ -213,9 +252,13 @@ b_move(1)";
 
         for (int i = 0; i < repeat; i++)
         {
+            yield return new WaitWhile(() => _paused);
+
             yield return new WaitUntil(() => behavior != null && !behavior.isMoving);
             yield return null; // 프레임 경계 넘김으로 동시 호출 레이스 방지
             moveAction?.Invoke();
+
+            yield return new WaitWhile(() => _paused);
             yield return new WaitUntil(() => behavior != null && !behavior.isMoving);
         }
         //Debug.Log($"{dbgLine} ___ done x{repeat}");

@@ -4,8 +4,13 @@ using UnityEngine;
 
 public class NextStage : MonoBehaviour
 {
-    public SceneLoadManager sceneLoad;
+    private SceneLoadManager sceneLoad;
     public int load;
+
+    private void Start()
+    {
+        sceneLoad = GameObject.Find("Manager/SceneLoadManager").GetComponent<SceneLoadManager>();
+    }
 
     private void OnTriggerEnter(Collider other)
     {

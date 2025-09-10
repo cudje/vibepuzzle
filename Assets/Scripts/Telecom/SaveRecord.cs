@@ -31,7 +31,6 @@ public class SaveRecord : MonoBehaviour
     [Header("서버 주소")]
     //public string wsUrl = "wss://192.168.178.134:8001/ws";
     public string wsUrl;
-    public TMP_InputField recentStage;
 
     private WebSocket ws;
 
@@ -39,7 +38,7 @@ public class SaveRecord : MonoBehaviour
     {
         if (wsUrl == "")
         {
-            wsUrl = "wss://192.168.179.56:8001/ws";
+            wsUrl = "wss://" + GameData.serverurl + ":8001/ws";
         }
         ws = new WebSocket(wsUrl);
 
@@ -72,8 +71,8 @@ public class SaveRecord : MonoBehaviour
 
         var payload = new RunLog
         {
-            user_id = GameData.userText,
-            stage_code = recentStage.text,
+            user_id = GameData.GetUserText(),
+            stage_code = GameData.GetRecentStage(),
             prompt_length = GameData.promptLen,
             clear_time_ms = GameData.moveCount
         };

@@ -6,16 +6,7 @@ using UnityEngine;
 
 public class Clear3DConditionManager : MonoBehaviour
 {
-    public GameObject ClearPopup;
-    public TMP_Text clearText;
-    public TMP_InputField recentStage;
-
-    public Transform[] players;
-    public Transform[] goal;
-    public Transform[] pieceGoal;
-
     public Behavior3DManager behavior;
-    public Piece3DManager piece;
     public AI_WebSocketClient wsclient;
     public SaveRecord saveRecord;
 
@@ -23,9 +14,8 @@ public class Clear3DConditionManager : MonoBehaviour
     public bool playerisGoal;
     public bool playerisHaving;
     public bool pieceisGoal;
-
-    public Transform[] clearDoor;
-
+    public System.Action OnCheckClear;
+        
     public AudioSource clearSource;
     public AudioSource doorSource;
     public AudioClip success;
@@ -43,28 +33,29 @@ public class Clear3DConditionManager : MonoBehaviour
     void Start()
     {
         // 배열 초기화
-        originPlayerPositions = new Vector3[players.Length];
-        originPlayerRotations = new Quaternion[players.Length];
-        originPiecePositions = new Vector3[piece.allPieces.Length];
-        originPieceRotations = new Quaternion[piece.allPieces.Length];
+        originPlayerPositions = new Vector3[SceneHubManager.I.roadTs.Length];
+        originPlayerRotations = new Quaternion[SceneHubManager.I.roadTs.Length];
+        originPiecePositions = new Vector3[SceneHubManager.I.pieces.Length];
+        originPieceRotations = new Quaternion[SceneHubManager.I.pieces.Length];
 
         // 위치 및 회전 저장
-        for (int i = 0; i < players.Length; i++)
+        for (int i = 0; i < SceneHubManager.I.roadTs.Length; i++)
         {
-            originPlayerPositions[i] = players[i].position;
-            originPlayerRotations[i] = players[i].rotation;
+            originPlayerPositions[i] = SceneHubManager.I.roadTs[i].position;
+            originPlayerRotations[i] = SceneHubManager.I.roadTs[i].rotation;
         }
 
-        for (int i = 0; i < piece.allPieces.Length; i++)
+        for (int i = 0; i < SceneHubManager.I.pieces.Length; i++)
         {
-            originPiecePositions[i] = piece.allPieces[i].transform.position;
-            originPieceRotations[i] = piece.allPieces[i].transform.rotation;
+            originPiecePositions[i] = SceneHubManager.I.pieces[i].transform.position;
+            originPieceRotations[i] = SceneHubManager.I.pieces[i].transform.rotation;
         }
     }
 
 
     public void CheckClear()
     {
+        OnCheckClear?.Invoke(); // checkClear가 호출되었음을 알림 -> InteractManager에서 받아서 UI 변경
         // playerisGoal이 체크된 경우 플레이어가 골에 도착했는지를 확인함. 새로운 조건이 추가되면 아래 항에 이어서 확장하면 됨.
         if (playerisGoal && !arrivedPlayer())
         {
@@ -89,8 +80,7 @@ public class Clear3DConditionManager : MonoBehaviour
             wsclient.isBusy = false;
             return;
         }
-
-        StartCoroutine(RunClearFlow());
+    StartCoroutine(RunClearFlow());
     }
 
     IEnumerator RunClearFlow()
@@ -102,7 +92,7 @@ public class Clear3DConditionManager : MonoBehaviour
         yield return new WaitUntil(() => GameData.serverAck);
 
         // 응답이 오면 실행
-        GameData.setStageClear(recentStage.text);
+        GameData.setStageClear(GameData.recentStage);
         clearSource.PlayOneShot(success);
         wsclient.isBusy = false;
         ShowClear();
@@ -110,18 +100,26 @@ public class Clear3DConditionManager : MonoBehaviour
 
     public void ResetObject()
     {
-        behavior.clearHeld();
-        for (int i = 0; i < players.Length; i++)
-        {
-            players[i].position = originPlayerPositions[i];
-            players[i].rotation = originPlayerRotations[i];
-        }
+    // (0) ★ 가장 먼저 진행 중 동작을 완전히 중단
+    if (behavior != null)
+    {
+        behavior.HardStopAll();
+        behavior.clearHeld();    //즉시 내려놓기      
+    }
 
-        for (int i = 0; i < piece.allPieces.Length; i++)
-        {
-            piece.allPieces[i].transform.position = originPiecePositions[i];
-            piece.allPieces[i].transform.rotation = originPieceRotations[i];
-        }
+    // (1) 플레이어 위치/회전 복구
+    for (int i = 0; i < SceneHubManager.I.roadTs.Length; i++)
+    {
+        SceneHubManager.I.roadTs[i].position = originPlayerPositions[i];
+        SceneHubManager.I.roadTs[i].rotation = originPlayerRotations[i];
+    }
+
+    // (2) 조각 위치/회전 복구
+    for (int i = 0; i < SceneHubManager.I.pieces.Length; i++)
+    {
+        SceneHubManager.I.pieces[i].transform.position = originPiecePositions[i];
+        SceneHubManager.I.pieces[i].transform.rotation = originPieceRotations[i];
+    }
     }
 
     IEnumerator RotateDoor(Transform door, float targetY, float duration)
@@ -145,19 +143,19 @@ public class Clear3DConditionManager : MonoBehaviour
 
     public void OpenDoors()
     {
-        StartCoroutine(RotateDoor(clearDoor[0], 10f, 1f));   // 1초 동안 Y축 10도
-        StartCoroutine(RotateDoor(clearDoor[1], -10f, 1f));  // 1초 동안 Y축 -10도
+        StartCoroutine(RotateDoor(SceneHubManager.I.clearDoorLeftT, 10f, 1f));   // 1초 동안 Y축 10도
+        StartCoroutine(RotateDoor(SceneHubManager.I.clearDoorRightT, -10f, 1f));  // 1초 동안 Y축 -10도
         doorSource.PlayOneShot(door);
     }
 
     public void ShowClear()
     {
-        if (!ClearPopup.activeSelf)
+        if (!SceneHubManager.I.clearPopup.activeSelf)
         {
-            clearText.text = $"축하합니다!\n클리어하였습니다.\n" +
+            SceneHubManager.I.clearTMPText.text = $"축하합니다!\n클리어하였습니다.\n" +
                 $"프롬프트 길이 : {GameData.promptLen}({GameData.rank_tokens}위, 상위 {GameData.rank_tokens_percent:F1}%)\n" +
                 $"이동시간 : {GameData.moveCount}({GameData.rank_clear_time}위, 상위 {GameData.rank_clear_time_percent:F1}%)";
-            ClearPopup.SetActive(true);
+            SceneHubManager.I.clearPopup.SetActive(true);
         }
         OpenDoors();
         // 문열어야 함.
@@ -166,10 +164,10 @@ public class Clear3DConditionManager : MonoBehaviour
     // 모든 플레이어가 모든 goal과 일치하는지.
     public bool arrivedPlayer()
     {
-        return !players.Where((t, i) =>
+        return !SceneHubManager.I.roadTs.Where((t, i) =>
         {
             Vector3 a = t.position;
-            Vector3 b = goal[i].position;
+            Vector3 b = SceneHubManager.I.goalTs[i].position;
 
             // Y축 제외한 평면 거리 비교
             a.y = 0;
@@ -188,9 +186,9 @@ public class Clear3DConditionManager : MonoBehaviour
     {
         float arrivalRadius = 1.0f;
 
-        foreach (Transform goal in pieceGoal)
+        foreach (Transform goal in SceneHubManager.I.pieceGoalTs)
         {
-            bool hasPiece = piece.allPieces.Any(p =>
+            bool hasPiece = SceneHubManager.I.pieces.Any(p =>
             {
                 if (p == null) return false;
 

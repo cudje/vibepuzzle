@@ -7,6 +7,11 @@ public class SceneLoadManager : MonoBehaviour
 {
     public string[] SceneNames;
 
+    public void SetStageData(string stage)
+    {
+        GameData.SetRecentStage(stage);
+    }
+
     public void load(int sceneNumber)
     {
         SceneManager.LoadScene(SceneNames[sceneNumber]);

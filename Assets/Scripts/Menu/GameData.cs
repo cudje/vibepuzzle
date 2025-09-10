@@ -3,12 +3,17 @@ using TMPro;
 
 public static class GameData
 {
+    public static string serverurl = "192.168.177.4";
+
     public static string userText = "User";
+    public static int profileImage = 0;
+
+    public static bool[] stageClear;
+
+    public static string recentStage = "A1";
 
     public static int moveCount = 0;
     public static int promptLen = 0;
-
-    public static bool[] stageClear;
 
     public static float rank_clear_time_percent = 0.0f;
     public static int rank_clear_time = 0;
@@ -26,6 +31,8 @@ public static class GameData
     {
         userText = text;
     }
+
+    public static string GetUserText() { return userText; }
 
     public static void setClear()
     {
@@ -56,4 +63,9 @@ public static class GameData
         rank_tokens = 0;
     }
 
+    public static void SetRecentStage(string stage)
+    {
+        recentStage = stage;
+    }
+    public static string GetRecentStage() {  return recentStage; }
 }

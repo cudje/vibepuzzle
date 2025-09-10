@@ -13,6 +13,7 @@ using UnityEngine.Networking;
 public class ProgressResponse
 {
     public string user_id;
+    public int profile_image;                  // ← 추가
     public System.Collections.Generic.List<StageProgress> stages;
 }
 
@@ -41,26 +42,17 @@ public class CreateUserReq
 public class LoadID : MonoBehaviour
 {
     [Header("API Base")]
-    //public string restBaseUrl = "https://192.168.178.134:8001";
     public string restBaseUrl;
     public SceneLoadManager sceneLoadManager;
     public GameObject executeWarn;
     public float busyNoticeDuration = 1.5f;
 
-    private const string PREF_USER_ID = "user_id";
-
     private void Start()
     {
         if (restBaseUrl == "") {
-            restBaseUrl = "https://192.168.179.56:8001";
+            restBaseUrl = "https://" + GameData.serverurl + ":8001";
         }
     }
-
-    // 로컬 저장소(PlayerPrefs)에 user_id 저장
-    void SaveUserId(string uid) => PlayerPrefs.SetString(PREF_USER_ID, uid);
-
-    // 로컬에서 user_id 불러오기
-    string LoadUserIdLocal() => PlayerPrefs.GetString(PREF_USER_ID, string.Empty);
 
     // HTTPS 인증서 무시 핸들러 (개발용)
     class DevCertBypass : CertificateHandler
@@ -105,8 +97,6 @@ public class LoadID : MonoBehaviour
 
             if (req.result == UnityWebRequest.Result.Success)
             {
-                SaveUserId(uid);
-
                 // JSON 파싱
                 ProgressResponse resp = JsonUtility.FromJson<ProgressResponse>(body);
                 if (resp == null || resp.stages == null || resp.stages.Count == 0)
@@ -121,7 +111,7 @@ public class LoadID : MonoBehaviour
                 }
 
                 // 조회 성공 시 출력
-                PrintStages(resp);
+                ExecuteStagesStatus(resp);
                 sceneLoadManager.load(0);
             }
             else
@@ -130,6 +120,7 @@ public class LoadID : MonoBehaviour
                 StartCoroutine(CoShowBusyNotice("서버에 연결되어 있지 않습니다..."));
                 Debug.LogWarning($"[LoadID] 진행 조회 실패 (HTTP {code}) {req.error} :: {body}");
                 GameData.stageClear[0] = true;
+                GameData.profileImage = 0;
                 sceneLoadManager.load(0);
             }
         }
@@ -161,7 +152,6 @@ public class LoadID : MonoBehaviour
             if (req.result == UnityWebRequest.Result.Success)
             {
                 Debug.Log($"[LoadID] ID 생성 완료 (HTTP {code}) :: {body}");
-                SaveUserId(uid);
             }
             else
             {
@@ -187,7 +177,7 @@ public class LoadID : MonoBehaviour
             ProgressResponse resp = JsonUtility.FromJson<ProgressResponse>(body);
 
             if (resp != null && resp.stages != null)
-                PrintStages(resp);
+                ExecuteStagesStatus(resp);
             else
                 Debug.LogWarning("[LoadID] 재조회했지만 데이터 없음");
         }
@@ -196,8 +186,11 @@ public class LoadID : MonoBehaviour
     // ==================================
     // Stage 리스트 출력 (Unlocked=true만)
     // ==================================
-    void PrintStages(ProgressResponse resp)
+    void ExecuteStagesStatus(ProgressResponse resp)
     {
+        GameData.profileImage = resp.profile_image;
+        Debug.Log($"Profile Number={GameData.profileImage}");
+
         int n = 0;
         foreach (var stage in resp.stages)
         {
