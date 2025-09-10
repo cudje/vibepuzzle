@@ -31,20 +31,7 @@ using TMPro;
 /// </summary>
 public class InputFieldManager : MonoBehaviour, IPointerDownHandler
 {
-    [Header("필수 참조")]
-    [SerializeField] TMP_InputField tmpInput;           // 입력 대상 (TMP 전용)
-    [SerializeField] RectTransform smallInput;          // 작은 입력 필드의 RectTransform (자기 자신)
-
-    [Header("확장시 이동할 부모(컨테이너)")]
-    [SerializeField] RectTransform targetParent;        // overlay/Panel
-
-    [Header("오버레이(CanvasGroup)")]
-    [SerializeField] CanvasGroup overlayCg;             // overlay 루트의 CanvasGroup
     [SerializeField] float overlayFade = 0.25f;         // FullscreenOverlay와 동일 동작
-
-    [Header("버튼")]
-    [SerializeField] Button closeButton;                // overlay/close_button
-    [SerializeField] Button clearAllButton;             // overlay/all_remove_button
 
     [Header("옵션")]
     [SerializeField] bool ignoreLayoutOnExpand = true;  // InputExpandToTarget 과 동일 동작
@@ -56,16 +43,15 @@ public class InputFieldManager : MonoBehaviour, IPointerDownHandler
     Vector2 origAnchorMin, origAnchorMax, origAnchoredPos, origSizeDelta, origPivot;
     bool isExpanded = false;
 
-    void Awake()
+    void Start()
     {
-        rt = smallInput ? smallInput : GetComponent<RectTransform>();
-        if (tmpInput == null) tmpInput = GetComponent<TMP_InputField>();
-        if (overlayCg) ShowOverlay(false, true); // 시작은 숨김
+        rt = SceneHubManager.I.promptTMPInputField.transform.GetComponent<RectTransform>();
+        ShowOverlay(false, true); // 시작은 숨김
         BackupRect();
 
         // 버튼 연결 (단순 연결만, 기능 추가 없음)
-        if (closeButton) closeButton.onClick.AddListener(Collapse);
-        if (clearAllButton) clearAllButton.onClick.AddListener(ClearAll);
+        SceneHubManager.I.overlayCloseButton.onClick.AddListener(Collapse);
+        SceneHubManager.I.overlayClearButton.onClick.AddListener(ClearAll);
     }
 
     // 초기 RectTransform 상태 백업 (BackToTheFuture.BackupRect)
@@ -116,10 +102,7 @@ public class InputFieldManager : MonoBehaviour, IPointerDownHandler
         }
 
         // 목표 부모로 이동 (InputExpandToTarget)
-        if (targetParent)
-            rt.SetParent(targetParent, false);
-        else
-            Debug.LogWarning("[InputFieldManager] targetParent가 비어있습니다.");
+        rt.SetParent(SceneHubManager.I.overlayPanelRectT, false);
 
         // 새 부모 기준으로 꽉 채우기 (BackToTheFuture의 전체 확장 값 사용)
         rt.anchorMin = Vector2.zero;
@@ -146,19 +129,19 @@ public class InputFieldManager : MonoBehaviour, IPointerDownHandler
     // 전체 지우기 (ClearInputButton.ClearText)
     public void ClearAll()
     {
-        if (tmpInput) tmpInput.text = string.Empty;
+        SceneHubManager.I.promptTMPInputField.text = string.Empty;
     }
 
     // ----- FullscreenOverlay 동작 그대로 -----
     void ShowOverlay(bool on, bool instant = false)
     {
-        if (!overlayCg) return;
+        if (!SceneHubManager.I.overlayCanvasG) return;
         StopAllCoroutines();
         if (instant)
         {
-            overlayCg.alpha = on ? 1f : 0f;
-            overlayCg.blocksRaycasts = on;
-            overlayCg.interactable   = on;
+            SceneHubManager.I.overlayCanvasG.alpha = on ? 1f : 0f;
+            SceneHubManager.I.overlayCanvasG.blocksRaycasts = on;
+            SceneHubManager.I.overlayCanvasG.interactable   = on;
             return;
         }
         StartCoroutine(FadeOverlay(on));
@@ -166,18 +149,18 @@ public class InputFieldManager : MonoBehaviour, IPointerDownHandler
 
     IEnumerator FadeOverlay(bool on)
     {
-        float s = overlayCg.alpha;
+        float s = SceneHubManager.I.overlayCanvasG.alpha;
         float e = on ? 1f : 0f;
         float t = 0f;
         while (t < overlayFade)
         {
             t += Time.unscaledDeltaTime;
-            overlayCg.alpha = Mathf.Lerp(s, e, t / overlayFade);
+            SceneHubManager.I.overlayCanvasG.alpha = Mathf.Lerp(s, e, t / overlayFade);
             yield return null;
         }
-        overlayCg.alpha = e;
-        overlayCg.blocksRaycasts = on;
-        overlayCg.interactable   = on;
+        SceneHubManager.I.overlayCanvasG.alpha = e;
+        SceneHubManager.I.overlayCanvasG.blocksRaycasts = on;
+        SceneHubManager.I.overlayCanvasG.interactable   = on;
     }
 
     // 버튼에 쉽게 연결할 수 있는 래퍼 (원본 FullscreenOverlay와 동일 API)

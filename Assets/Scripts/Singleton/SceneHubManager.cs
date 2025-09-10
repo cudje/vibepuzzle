@@ -44,6 +44,10 @@ public class SceneHubManager : MonoBehaviour
     public TMP_Text executeWarnTMPText;
     public TMP_Text dialogueTMPText;
     public GameObject variableJoystick;
+    public CanvasGroup overlayCanvasG;
+    public RectTransform overlayPanelRectT;
+    public Button overlayCloseButton;
+    public Button overlayClearButton;
 
     [Header("Auto-Wire Paths / Names")]
     private string charRoboPath = "Char_Robo";
@@ -66,6 +70,7 @@ public class SceneHubManager : MonoBehaviour
     private string dialogueUIPath = "Canvas/ConditionUI/DialogueUI";
     private string promptPath = "Canvas/Prompt";
     private string variableJoystickPath = "Canvas/Variable Joystick";
+    private string overlayPath = "Canvas/Overlay";
 
     void Awake()
     {
@@ -134,5 +139,9 @@ public class SceneHubManager : MonoBehaviour
         executeWarnTMPText = executeWarn.GetComponent<TMP_Text>();
         dialogueTMPText = dialogueUI.transform.Find("Button/DialogueText").GetComponent <TMP_Text>();
         variableJoystick = GameObject.Find(variableJoystickPath);
+        overlayCanvasG = GameObject.Find(overlayPath).GetComponent<CanvasGroup>();
+        overlayPanelRectT = overlayCanvasG.transform.Find("Panel").GetComponent<RectTransform>();
+        overlayCloseButton = overlayCanvasG.transform.Find("Close_Button").GetComponent<Button>();
+        overlayClearButton = overlayCanvasG.transform.Find("ClearAll_Button").GetComponent<Button>();
     }
 }
