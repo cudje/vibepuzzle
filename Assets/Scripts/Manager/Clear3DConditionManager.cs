@@ -3,12 +3,15 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.UI;
+using Unity.VisualScripting;
 
 public class Clear3DConditionManager : MonoBehaviour
 {
     public Behavior3DManager behavior;
     public AI_WebSocketClient wsclient;
     public SaveRecord saveRecord;
+    public LeaderBoardManager leaderboard;
 
     // 스테이지별 조건을 추가하여 확장할 수 있음 e.g. 플레이어가 데이터조각을 들었는지(이 경우 playerisGoal은 체크해제하고 playerisHaving 이런 변수를 만들어 체크하여 사용)
     public bool playerisGoal;
@@ -150,6 +153,12 @@ public class Clear3DConditionManager : MonoBehaviour
 
     public void ShowClear()
     {
+        SceneHubManager.I.prompt.SetActive(false);
+        SceneHubManager.I.pauseButton.interactable = false;
+        SceneHubManager.I.resetButton.interactable = false;
+        leaderboard.AddRanker();
+
+
         if (!SceneHubManager.I.clearPopup.activeSelf)
         {
             SceneHubManager.I.clearTMPText.text = $"축하합니다!\n클리어하였습니다.\n" +

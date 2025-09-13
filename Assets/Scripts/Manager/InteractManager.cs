@@ -5,9 +5,6 @@ using UnityEngine.SceneManagement;
 public class InteractManager : MonoBehaviour
 {
     [Header("Buttons")]
-    public Button switchCameraBtn;
-    public Button pauseBtn;
-    public Button resetBtn;
     public Behavior3DManager behavior;                 // 인스펙터에 연결
     public PromptInterpreter promptInterpreter;
 
@@ -38,11 +35,11 @@ public class InteractManager : MonoBehaviour
 
     void Start()
     {
-        if (switchCameraBtn) switchCameraBtn.onClick.AddListener(ToggleCamera);
-        if (pauseBtn) pauseBtn.onClick.AddListener(TogglePausePlay);
-        if (resetBtn) resetBtn.onClick.AddListener(DoReset);
-        if (pauseBtn) pauseBtn.interactable = false;
-        if (resetBtn) resetBtn.interactable = false;
+        SceneHubManager.I.switchCameraButton.onClick.AddListener(ToggleCamera);
+        SceneHubManager.I.pauseButton.onClick.AddListener(TogglePausePlay);
+        SceneHubManager.I.resetButton.onClick.AddListener(DoReset);
+        SceneHubManager.I.pauseButton.interactable = false;
+        SceneHubManager.I.resetButton.interactable = false;
         CacheCeilingComponents();
         if (promptInterpreter != null)
         {
@@ -66,8 +63,8 @@ public class InteractManager : MonoBehaviour
     private void HandleScriptStarted()
     {
         //  스크립트 실행 시작 시 버튼 활성화
-        if (pauseBtn) pauseBtn.interactable = true;
-        if (resetBtn) resetBtn.interactable = true;
+        SceneHubManager.I.pauseButton.interactable = true;
+        SceneHubManager.I.resetButton.interactable = true;
     }
 
     void TogglePausePlay()
@@ -112,7 +109,6 @@ public class InteractManager : MonoBehaviour
 
     void DoReset()
     {
-
         // 즉시 중단
         promptInterpreter?.StopScript();
         behavior?.HardStopAll();
@@ -169,12 +165,6 @@ public class InteractManager : MonoBehaviour
     {
         var scene = SceneManager.GetActiveScene();
         SceneManager.LoadScene(scene.buildIndex);
-    }
-
-    public void SetButtonsInteractable(bool interactable)
-    {
-        Button[] all = { switchCameraBtn, resetBtn, pauseBtn };
-        foreach (var b in all) if (b) b.interactable = interactable;
     }
 
     // ---- 내부 로직 ----

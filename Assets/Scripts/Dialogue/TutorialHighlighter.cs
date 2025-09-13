@@ -124,6 +124,7 @@ public class TutorialHighlighter : MonoBehaviour
 public class TutorialSteps : MonoBehaviour
 {
     public TutorialHighlighter highlighter;
+    public VariableJoystick variableJoystick;
 
     [Header("Targets")]
     public RectTransform homeButton;
@@ -134,7 +135,7 @@ public class TutorialSteps : MonoBehaviour
 
     public void Step_Home()
     {
-        dialogueManager.StartDialogue( /* 단계 번호 */ 1);
+        dialogueManager.StartDialogue(1);
         highlighter.Highlight(homeButton, 12f);
     }
 

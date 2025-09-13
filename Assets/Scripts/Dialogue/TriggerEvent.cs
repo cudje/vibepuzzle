@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using UnityEngine.EventSystems;
 
 public class TriggerEvent : MonoBehaviour
 {
@@ -22,8 +23,12 @@ public class TriggerEvent : MonoBehaviour
         {
             eventStarted = true;
 
-            // 카메라 전환
+            // 카메라 전환 및 UI 일시적 Off
             dialogueManager.SetMainCamera(false);
+            SceneHubManager.I.variableJoystick.SetActive(false);
+            SceneHubManager.I.prompt.SetActive(false);
+            SceneHubManager.I.interact.SetActive(false);
+            SceneHubManager.I.variableJoystick.GetComponent<VariableJoystick>().OnPointerUp(new PointerEventData(EventSystem.current));
 
             // 렉시 이동 시작
             lexyMoving = true;

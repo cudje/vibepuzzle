@@ -4,57 +4,42 @@ using UnityEngine.EventSystems;
 using System.Collections;
 using TMPro;
 
-/// <summary>
-/// InputFieldManager (단일 스크립트)
-/// - 작은 TMP_InputField를 탭하면 전체 확장 (부모 이동 + 앵커 풀스크린)
-/// - 오버레이 페이드 인/아웃으로 표시, 레이캐스트 차단
-/// - 닫기 버튼: 원래 부모/Rect로 복원
-/// - 전체 지우기 버튼: 입력 텍스트 모두 삭제
-///
-/// 기존 개별 스크립트들을 하나로 결합:
-/// 1) BackToTheFuture: RectTransform 상태 백업/복원 + 전체 확장
-/// 2) InputExpandToTarget: 대상 부모로 이동 후 전체 채우기
-/// 3) FullscreenOverlay: CanvasGroup 페이드 표시/숨김
-/// 4) ClearInputButton: TMP_InputField 텍스트 지우기
-///
-/// *추가/수정 기능 없이 위 4가지 동작만 그대로 수행합니다.
-///
-/// 구성 예 (사용자 제공 구조 기준):
-///   Prompt
-///     ├─ Text (TMP)
-///     ├─ InputField (TMP)   ← smallInput 에 할당 & 이 스크립트 부착
-///     └─ Send_Button
-///   overlay                  ← overlayRoot (CanvasGroup 포함) 에 할당
-///     ├─ close_button        ← closeButton 에 할당 (OnClick = Collapse)
-///     ├─ all_remove_button   ← clearAllButton 에 할당 (OnClick = ClearAll)
-///     └─ Panel               ← targetParent 에 할당 (확장시 이 밑으로 이동)
-/// </summary>
-public class InputFieldManager : MonoBehaviour, IPointerDownHandler
+public class InputFieldManager : MonoBehaviour, 
+    IPointerDownHandler, IPointerUpHandler,
+    IBeginDragHandler, IDragHandler, IEndDragHandler
 {
-    [SerializeField] float overlayFade = 0.25f;         // FullscreenOverlay와 동일 동작
+    [SerializeField] float overlayFade = 0.25f;
 
     [Header("옵션")]
-    [SerializeField] bool ignoreLayoutOnExpand = true;  // InputExpandToTarget 과 동일 동작
+    [SerializeField] bool ignoreLayoutOnExpand = true;
 
-    // ----- 내부 상태 (BackToTheFuture와 동일 개념의 백업) -----
-    RectTransform rt;               // smallInput 캐시
+    [Header("탭 판정 임계값")]
+    [SerializeField] float tapTime = 0.25f;    // 누르고 뗄 때까지 걸린 시간(초)이 이 값 이하이면 탭 후보
+    [SerializeField] float tapMovePx = 10f;    // 누른 위치 대비 이동 픽셀이 이 값 이하이면 탭 후보
+
+    // 내부 상태
+    RectTransform rt;
     Transform originalParent;
     int originalSiblingIndex;
     Vector2 origAnchorMin, origAnchorMax, origAnchoredPos, origSizeDelta, origPivot;
     bool isExpanded = false;
 
+    // 작은 상태 입력 제스처 판정용
+    bool pointerDown;
+    bool draggingWhileSmall;
+    Vector2 downPos;
+    float downTime;
+
     void Start()
     {
         rt = SceneHubManager.I.promptTMPInputField.transform.GetComponent<RectTransform>();
-        ShowOverlay(false, true); // 시작은 숨김
+        ShowOverlay(false, true);
         BackupRect();
 
-        // 버튼 연결 (단순 연결만, 기능 추가 없음)
         SceneHubManager.I.overlayCloseButton.onClick.AddListener(Collapse);
         SceneHubManager.I.overlayClearButton.onClick.AddListener(ClearAll);
     }
 
-    // 초기 RectTransform 상태 백업 (BackToTheFuture.BackupRect)
     void BackupRect()
     {
         if (!rt) return;
@@ -67,7 +52,6 @@ public class InputFieldManager : MonoBehaviour, IPointerDownHandler
         originalSiblingIndex = rt.GetSiblingIndex();
     }
 
-    // 원래 상태로 되돌리기 (BackToTheFuture.RestoreRect)
     public void RestoreRect()
     {
         if (!rt) return;
@@ -81,30 +65,78 @@ public class InputFieldManager : MonoBehaviour, IPointerDownHandler
         isExpanded = false;
     }
 
-    // 작은 입력필드를 탭했을 때 (IPointerDownHandler & Expand)
-    public void OnPointerDown(PointerEventData _)
+    // ▼ 기존: OnPointerDown에서 곧바로 Expand() → (수정) 기록만 하고 대기
+    public void OnPointerDown(PointerEventData e)
     {
         if (isExpanded) return;
-        Expand();
+        pointerDown = true;
+        draggingWhileSmall = false;
+        downPos = e.position;
+        downTime = Time.unscaledTime;
     }
 
-    // 전체 확장: 대상 부모로 이동 후 전체 채우기 (InputExpandToTarget + BackToTheFuture.OnPointerDown)
+    // 드래그가 시작되면 "작은 상태 드래그"로 간주
+    public void OnBeginDrag(PointerEventData e)
+    {
+        if (isExpanded) return;
+        if (!pointerDown) return; // 안전장치
+        draggingWhileSmall = true;
+        // 필요한 경우: 작은 상태에서 드래그 시 동작(스크롤 위임 등)을 여기서 처리
+        // Debug.Log("Small BeginDrag");
+    }
+
+    public void OnDrag(PointerEventData e)
+    {
+        if (isExpanded) return;
+        if (!draggingWhileSmall) return;
+        // 작은 상태 드래그 중… 필요 시 처리
+        // Debug.Log("Small Drag " + e.delta);
+    }
+
+    public void OnEndDrag(PointerEventData e)
+    {
+        if (isExpanded) return;
+        if (!draggingWhileSmall) return;
+        draggingWhileSmall = false;
+        pointerDown = false;
+        // Debug.Log("Small EndDrag");
+    }
+
+    // 손을 뗄 때, 드래그가 없고 짧고 거의 안 움직였으면 탭 → Expand()
+    public void OnPointerUp(PointerEventData e)
+    {
+        if (isExpanded) return;
+
+        float dt = Time.unscaledTime - downTime;
+        float moved = Vector2.Distance(downPos, e.position);
+
+        bool isTapLike = dt <= tapTime && moved <= tapMovePx;
+
+        pointerDown = false;
+
+        if (!draggingWhileSmall && isTapLike)
+        {
+            Expand();
+        }
+        else
+        {
+            // 작은 상태에서 드래그로 간주된 경우: 아무 것도 하지 않고 유지
+            // Debug.Log("Small gesture was drag or long/large move; stay collapsed");
+        }
+    }
+
     public void Expand()
     {
         if (isExpanded || rt == null) return;
 
-        // (선택) 레이아웃 간섭 끄기
         if (ignoreLayoutOnExpand)
         {
             var le = rt.GetComponent<LayoutElement>();
             if (!le) le = rt.gameObject.AddComponent<LayoutElement>();
-            le.ignoreLayout = true; // 원본 스크립트와 동일: 복원 로직 추가하지 않음
+            le.ignoreLayout = true; // 원 코드 의도 유지(복원은 하지 않음)
         }
 
-        // 목표 부모로 이동 (InputExpandToTarget)
         rt.SetParent(SceneHubManager.I.overlayPanelRectT, false);
-
-        // 새 부모 기준으로 꽉 채우기 (BackToTheFuture의 전체 확장 값 사용)
         rt.anchorMin = Vector2.zero;
         rt.anchorMax = Vector2.one;
         rt.pivot = new Vector2(0.5f, 0.5f);
@@ -118,7 +150,6 @@ public class InputFieldManager : MonoBehaviour, IPointerDownHandler
         ShowOverlay(true);
     }
 
-    // 닫기: 원래 상태 복구 + 오버레이 숨김
     public void Collapse()
     {
         if (!isExpanded) return;
@@ -126,13 +157,11 @@ public class InputFieldManager : MonoBehaviour, IPointerDownHandler
         ShowOverlay(false);
     }
 
-    // 전체 지우기 (ClearInputButton.ClearText)
     public void ClearAll()
     {
         SceneHubManager.I.promptTMPInputField.text = string.Empty;
     }
 
-    // ----- FullscreenOverlay 동작 그대로 -----
     void ShowOverlay(bool on, bool instant = false)
     {
         if (!SceneHubManager.I.overlayCanvasG) return;
@@ -163,7 +192,6 @@ public class InputFieldManager : MonoBehaviour, IPointerDownHandler
         SceneHubManager.I.overlayCanvasG.interactable   = on;
     }
 
-    // 버튼에 쉽게 연결할 수 있는 래퍼 (원본 FullscreenOverlay와 동일 API)
     public void ShowOn()  => ShowOverlay(true);
     public void ShowOff() => ShowOverlay(false);
 }

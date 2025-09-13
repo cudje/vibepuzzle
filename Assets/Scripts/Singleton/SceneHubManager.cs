@@ -39,7 +39,7 @@ public class SceneHubManager : MonoBehaviour
     public TMP_Text clearTMPText;
     public GameObject prompt;
     public TMP_InputField promptTMPInputField;
-    public GameObject promptOpen;
+    //public GameObject promptOpen;
     public Image loadingImage;
     public TMP_Text executeWarnTMPText;
     public TMP_Text dialogueTMPText;
@@ -48,6 +48,10 @@ public class SceneHubManager : MonoBehaviour
     public RectTransform overlayPanelRectT;
     public Button overlayCloseButton;
     public Button overlayClearButton;
+    public GameObject interact;
+    public Button pauseButton;
+    public Button resetButton;
+    public Button switchCameraButton;
 
     [Header("Auto-Wire Paths / Names")]
     private string charRoboPath = "Char_Robo";
@@ -71,6 +75,7 @@ public class SceneHubManager : MonoBehaviour
     private string promptPath = "Canvas/Prompt";
     private string variableJoystickPath = "Canvas/Variable Joystick";
     private string overlayPath = "Canvas/Overlay";
+    private string interactPath = "Canvas/Interact";
 
     void Awake()
     {
@@ -134,7 +139,7 @@ public class SceneHubManager : MonoBehaviour
         clearTMPText = clearPopup.transform.Find("Clear_TMPText").GetComponent<TMP_Text>();
         prompt = GameObject.Find(promptPath);
         promptTMPInputField = prompt.transform.Find("Prompt_TMPInputField").GetComponent<TMP_InputField>();
-        promptOpen = prompt.transform.Find("PromptOpen_Button").gameObject;
+        //promptOpen = prompt.transform.Find("PromptOpen_Button").gameObject;
         loadingImage = prompt.transform.Find("Loading_Image").GetComponent<Image>();
         executeWarnTMPText = executeWarn.GetComponent<TMP_Text>();
         dialogueTMPText = dialogueUI.transform.Find("Button/DialogueText").GetComponent <TMP_Text>();
@@ -143,5 +148,9 @@ public class SceneHubManager : MonoBehaviour
         overlayPanelRectT = overlayCanvasG.transform.Find("Panel").GetComponent<RectTransform>();
         overlayCloseButton = overlayCanvasG.transform.Find("Close_Button").GetComponent<Button>();
         overlayClearButton = overlayCanvasG.transform.Find("ClearAll_Button").GetComponent<Button>();
+        interact = GameObject.Find(interactPath);
+        pauseButton = interact.transform.Find("Pause").GetComponent<Button>();
+        resetButton = interact.transform.Find("Reset").GetComponent<Button>();
+        switchCameraButton = interact.transform.Find("Switch_camera").GetComponent<Button>();
     }
 }

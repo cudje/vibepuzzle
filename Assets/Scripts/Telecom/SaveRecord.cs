@@ -1,7 +1,8 @@
-using TMPro;
-using System;
+ï»¿using System;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
-using WebSocketSharp;
+using UnityEngine.Networking;
 
 [Serializable]
 public class RunLog
@@ -24,49 +25,48 @@ public class GameResultResponse
     public int rank_tokens;
     public int total_records;
     public string received_text;
+    public Leaderboards leaderboards;
+}
+
+[Serializable]
+public class Leaderboards
+{
+    public List<LeaderboardEntry> prompt_top10;
+    public List<LeaderboardEntry> time_top10;
+}
+
+[Serializable]
+public class LeaderboardEntry
+{
+    public string user_id;
+    public int prompt_length;
+    public int clear_time_ms;
+    public int profile_image;
+
+    public LeaderboardEntry(string userId, int promptLength, int clearTimeMs, int profileImage)
+    {
+        this.user_id = userId;
+        this.prompt_length = promptLength;
+        this.clear_time_ms = clearTimeMs;
+        this.profile_image = profileImage;
+    }
 }
 
 public class SaveRecord : MonoBehaviour
 {
-    [Header("¼­¹ö ÁÖ¼Ò")]
-    //public string wsUrl = "wss://192.168.178.134:8001/ws";
-    public string wsUrl;
-
-    private WebSocket ws;
+    [Header("ì„œë²„ ì£¼ì†Œ")]
+    public string restBaseUrl;
 
     void Start()
     {
-        if (wsUrl == "")
+        if (restBaseUrl == "")
         {
-            wsUrl = "wss://" + GameData.serverurl + ":8001/ws";
+            restBaseUrl = "https://" + GameData.serverurl + ":8001";
         }
-        ws = new WebSocket(wsUrl);
-
-        ws.OnOpen += (_, __) => Debug.Log("WS ¿¬°áµÊ");
-        ws.OnMessage += (_, e) =>
-        {
-            // °á°ú ¼ö½Å
-            var result = ParseGameResult(e.Data);
-            if (result != null)
-            {
-                Debug.Log(FormatGameResult(result));
-                GameData.serverAck = true;
-            }
-        };
-        ws.OnError += (_, e) => Debug.LogError("WS Error: " + e.Message);
-        ws.OnClose += (_, e) => Debug.Log("WS Closed");
-
-        ws.ConnectAsync();
     }
 
     public void SendRunLog()
     {
-        if (ws == null || ws.ReadyState != WebSocketState.Open)
-        {
-            Debug.LogWarning("WS ¹Ì¿¬°á");
-            return;
-        }
-
         GameData.serverAck = false;
 
         var payload = new RunLog
@@ -76,9 +76,62 @@ public class SaveRecord : MonoBehaviour
             prompt_length = GameData.promptLen,
             clear_time_ms = GameData.moveCount
         };
-        string json = JsonUtility.ToJson(payload);
-        ws.Send(json);
-        Debug.Log("Sent: " + json);
+
+        StartCoroutine(PostRunLog(payload));
+    }
+
+    private IEnumerator PostRunLog(RunLog data)
+    {
+        string url = $"{restBaseUrl}/run-logs";
+
+        string json = JsonUtility.ToJson(data);
+        byte[] body = System.Text.Encoding.UTF8.GetBytes(json);
+
+        using (var req = new UnityWebRequest(url, "POST"))
+        {
+            req.uploadHandler = new UploadHandlerRaw(body);
+            req.downloadHandler = new DownloadHandlerBuffer();
+            req.SetRequestHeader("Content-Type", "application/json");
+            req.timeout = 5;
+
+            // ë¡œì»¬/ê°œë°œ HTTPS ìì²´ì„œëª… ì¸ì¦ì„œ ìš°íšŒ(í•„ìš” ì‹œ)
+            if (IsHttps(url)) req.certificateHandler = new DevCertBypass();
+
+            Debug.Log($"[POST] {url} body={json}");
+            yield return req.SendWebRequest();
+
+            long code = req.responseCode;
+            string respText = req.downloadHandler != null ? req.downloadHandler.text : "";
+
+            bool ok = req.result == UnityWebRequest.Result.Success &&
+                      code >= 200 && code < 300;
+
+            if (ok)
+            {
+                var result = ParseGameResult(respText);
+                if (result != null && result.ack)
+                {
+                    Debug.Log(FormatGameResult(result));
+                    GameData.serverAck = true;
+                }
+                else
+                {
+                    Debug.LogWarning("[SaveRecord] ì‘ë‹µ íŒŒì‹± ì‹¤íŒ¨ ë˜ëŠ” ack=false :: " + respText);
+                }
+            }
+            else
+            {
+                Debug.LogError($"[SaveRecord] POST ì‹¤íŒ¨ (HTTP {code}) {req.error} :: {respText}");
+            }
+        }
+    }
+
+    private bool IsHttps(string url) => url.StartsWith("https://");
+
+    // ê°œë°œìš©(ìì²´ì„œëª… ì¸ì¦ì„œ) ìš°íšŒ í•¸ë“¤ëŸ¬ â€“ ì´ë¯¸ í”„ë¡œì íŠ¸ì— ìˆë‹¤ë©´ ì´ ì¤‘ë³µ ì •ì˜ëŠ” ì œê±°
+    private class DevCertBypass : CertificateHandler
+    {
+        protected override bool ValidateCertificate(byte[] certificateData) => true;
     }
 
     GameResultResponse ParseGameResult(string json)
@@ -86,30 +139,27 @@ public class SaveRecord : MonoBehaviour
         try { return JsonUtility.FromJson<GameResultResponse>(json); }
         catch (Exception ex)
         {
-            Debug.LogError("[SaveRecord] Parse ½ÇÆĞ: " + ex);
+            Debug.LogError("[SaveRecord] Parse ì‹¤íŒ¨: " + ex);
             return null;
         }
     }
 
     string FormatGameResult(GameResultResponse gr)
     {
-        if (gr == null || !gr.ack) return "¼­¹ö °á°ú ¾øÀ½";
+        if (gr == null || !gr.ack) return "ì„œë²„ ê²°ê³¼ ì—†ìŒ";
 
         GameData.rank_clear_time_percent = gr.rank_clear_time_percent;
         GameData.rank_clear_time = gr.rank_clear_time;
         GameData.rank_tokens_percent = gr.rank_tokens_percent;
         GameData.rank_tokens = gr.rank_tokens;
 
-        return
-            $"À¯ÀúID: {gr.user_id}\n" +
-            $"½ºÅ×ÀÌÁö: {gr.stage}\n" +
-            $"Å¬¸®¾îÅ¸ÀÓ: »óÀ§ {gr.rank_clear_time_percent:F1}% ¡¤ {gr.rank_clear_time}À§\n" +
-            $"´Ü¾î¼ö:     »óÀ§ {gr.rank_tokens_percent:F1}% ¡¤ {gr.rank_tokens}À§\n";
-    }
+        GameData.prompt_top10 = gr.leaderboards.prompt_top10;
+        GameData.time_top10 = gr.leaderboards.time_top10;
 
-    void OnApplicationQuit()
-    {
-        try { ws?.Close(); } catch { }
-        ws = null;
+        return
+            $"ìœ ì €ID: {gr.user_id}\n" +
+            $"ìŠ¤í…Œì´ì§€: {gr.stage}\n" +
+            $"í´ë¦¬ì–´íƒ€ì„: ìƒìœ„ {gr.rank_clear_time_percent:F1}% Â· {gr.rank_clear_time}ìœ„\n" +
+            $"ë‹¨ì–´ìˆ˜:     ìƒìœ„ {gr.rank_tokens_percent:F1}% Â· {gr.rank_tokens}ìœ„\n";
     }
 }

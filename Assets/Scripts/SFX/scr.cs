@@ -12,7 +12,6 @@ public class RoboHopImpact : MonoBehaviour
     [Header("Squash & Stretch")]
     public Transform body;            // 스케일 줄 대상
     public float squashAmount = 0.12f; // 바닥에서 납작 정도
-    public Transform shadow;
 
     Vector3 basePos;
     Vector3 bodyBaseScale;
@@ -57,11 +56,9 @@ public class RoboHopImpact : MonoBehaviour
             float k = Mathf.Clamp01(t / dur);
             float y = Mathf.Lerp(from, to, ease(k));
             transform.position = new Vector3(basePos.x, y, basePos.z);
-            UpdateShadow((y - basePos.y) / hopHeight);
             yield return null;
         }
         transform.position = new Vector3(basePos.x, to, basePos.z);
-        UpdateShadow((to - basePos.y) / hopHeight);
     }
 
     // Easing
@@ -71,14 +68,5 @@ public class RoboHopImpact : MonoBehaviour
     void SetSquash(float sx, float sy)
     {
         body.localScale = new Vector3(bodyBaseScale.x * sx, bodyBaseScale.y * sy, bodyBaseScale.z);
-    }
-
-    void UpdateShadow(float norm) // 0=바닥, 1=최고점
-    {
-        if (!shadow) return;
-        float s = Mathf.Lerp(1f, 0.7f, norm);
-        shadow.localScale = new Vector3(s, s * 0.6f, 1f);
-        var sr = shadow.GetComponent<SpriteRenderer>();
-        if (sr) sr.color = new Color(0,0,0, Mathf.Lerp(0.35f, 0.12f, norm));
     }
 }

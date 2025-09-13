@@ -68,9 +68,8 @@ public class DialogueManager : MonoBehaviour
         dialogueIndex = 0;
         dialogueActive = true;
 
+        // 대화창이 열리면서 게임 UI 숨기기
         SceneHubManager.I.dialogueUI.SetActive(true);
-        SceneHubManager.I.variableJoystick.SetActive(false);
-        SceneHubManager.I.promptOpen.SetActive(false);
 
         //  스테이지 번호에 맞는 대화 선택
         switch (stageNumber)
@@ -228,8 +227,10 @@ public class DialogueManager : MonoBehaviour
         if (audioSource != null) audioSource.Stop();
         if (SceneHubManager.I.lexyAnimator != null) SceneHubManager.I.lexyAnimator.SetBool("isTalking", false);
 
+        // 처음에 숨겼던것 다시 등장
         SceneHubManager.I.variableJoystick.SetActive(true);
-        SceneHubManager.I.promptOpen.SetActive(true);
+        SceneHubManager.I.prompt.SetActive(true);
+        SceneHubManager.I.interact.SetActive(true);
 
         Debug.Log("대화 종료");
         // 대화 끝나면 다시 통행 허용

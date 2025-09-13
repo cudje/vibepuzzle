@@ -151,13 +151,11 @@ b_move(1)";
 
     private void ProcessIfStatement(string line)
     {
-        // 정규식으로 search(숫자) 추출
         var match = System.Text.RegularExpressions.Regex.Match(line, @"search\((\d+)\)");
         if (!match.Success) return;
 
         int dir = int.Parse(match.Groups[1].Value);
 
-        // GetSearch 호출 (executeRobo 갱신)
         GetSearch(dir);
 
         // == 또는 != 조건 추출
@@ -188,16 +186,14 @@ b_move(1)";
         yield return new WaitWhile(() => _paused);
 
         // 객체 조작 우선
-        if (line[0] == 'h') // hold/pick
+        if (line[0] == 'p') // pick
         {
             yield return ActWithWait(() => behavior?.Pick(executeRobo));
-            //Debug.Log($"{line} ___ hold");
             yield break;
         }
-        if (line[0] == 'p') // put/drop
+        if (line[0] == 'd') // drop
         {
             yield return ActWithWait(() => behavior?.Drop(executeRobo));
-            //Debug.Log($"{line} ___ put");
             yield break;
         }
 
