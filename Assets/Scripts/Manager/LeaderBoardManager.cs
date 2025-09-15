@@ -104,6 +104,7 @@ public class LeaderBoardManager : MonoBehaviour
         {
             Color c = rankingImage.color;
             c.a = 0f;
+            rankingImage.color = c;
         }
     }
 }

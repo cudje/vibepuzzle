@@ -61,7 +61,7 @@ public class SaveRecord : MonoBehaviour
     {
         if (restBaseUrl == "")
         {
-            restBaseUrl = "https://" + GameData.serverurl + ":8001";
+            restBaseUrl = "https://" + GameData.serverurl + GameData.serverPort;
         }
     }
 

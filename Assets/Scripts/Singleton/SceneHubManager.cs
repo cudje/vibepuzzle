@@ -39,6 +39,7 @@ public class SceneHubManager : MonoBehaviour
     public TMP_Text clearTMPText;
     public GameObject prompt;
     public TMP_InputField promptTMPInputField;
+    public Button promptSendButton;
     //public GameObject promptOpen;
     public Image loadingImage;
     public TMP_Text executeWarnTMPText;
@@ -52,6 +53,9 @@ public class SceneHubManager : MonoBehaviour
     public Button pauseButton;
     public Button resetButton;
     public Button switchCameraButton;
+
+    [Header("Manager Objects")]
+    public GameObject JoystickManager;
 
     [Header("Auto-Wire Paths / Names")]
     private string charRoboPath = "Char_Robo";
@@ -76,6 +80,8 @@ public class SceneHubManager : MonoBehaviour
     private string variableJoystickPath = "Canvas/Variable Joystick";
     private string overlayPath = "Canvas/Overlay";
     private string interactPath = "Canvas/Interact";
+
+    private string joystickManagerPath = "Manager/PlayManager/JoystickManager";
 
     void Awake()
     {
@@ -139,6 +145,7 @@ public class SceneHubManager : MonoBehaviour
         clearTMPText = clearPopup.transform.Find("Clear_TMPText").GetComponent<TMP_Text>();
         prompt = GameObject.Find(promptPath);
         promptTMPInputField = prompt.transform.Find("Prompt_TMPInputField").GetComponent<TMP_InputField>();
+        promptSendButton = prompt.transform.Find("Send_Button").GetComponent<Button>();
         //promptOpen = prompt.transform.Find("PromptOpen_Button").gameObject;
         loadingImage = prompt.transform.Find("Loading_Image").GetComponent<Image>();
         executeWarnTMPText = executeWarn.GetComponent<TMP_Text>();
@@ -152,5 +159,8 @@ public class SceneHubManager : MonoBehaviour
         pauseButton = interact.transform.Find("Pause").GetComponent<Button>();
         resetButton = interact.transform.Find("Reset").GetComponent<Button>();
         switchCameraButton = interact.transform.Find("Switch_camera").GetComponent<Button>();
+
+        // Manager √ ±‚»≠
+        JoystickManager = GameObject.Find(joystickManagerPath);
     }
 }

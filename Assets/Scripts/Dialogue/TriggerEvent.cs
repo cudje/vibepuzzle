@@ -54,6 +54,7 @@ public class TriggerEvent : MonoBehaviour
 
         // 0.25초 기다림
         yield return new WaitForSeconds(0.25f);
+        SceneHubManager.I.JoystickManager.SetActive(false);
 
         // 이제부터는 매 프레임 이동
         while (lexyMoving && SceneHubManager.I.charLexyT != null && SceneHubManager.I.lexyTargetPosT != null)

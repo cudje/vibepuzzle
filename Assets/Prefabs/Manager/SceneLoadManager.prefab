@@ -46,3 +46,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   SceneNames:
   - StageSelect
+  loadingOverlayPrefab: {fileID: 2985765092101933517, guid: 71fc6eb676031c541895530dfaedd298, type: 3}
+  minShowTime: 0.8
+  fadeDuration: 0.25

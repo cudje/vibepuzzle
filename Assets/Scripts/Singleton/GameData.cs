@@ -3,12 +3,15 @@ using TMPro;
 
 public static class GameData
 {
-    public static string serverurl = "192.168.177.4";
+    public static int stageCount = 5;
+    //public static string serverurl = "192.168.177.4";
+    public static string serverurl = "unvintaged-dakota-folksier.ngrok-free.app";
+    public static string serverPort = "";
 
     public static string userText = "User";
     public static int profileImage = 0;
 
-    public static bool[] stageClear;
+    public static bool[] stageClear = new bool[stageCount];
 
     public static string recentStage = "A1";
 

@@ -10,6 +10,7 @@ public class Clear3DConditionManager : MonoBehaviour
 {
     public Behavior3DManager behavior;
     public AI_WebSocketClient wsclient;
+    public WarningManager warning;
     public SaveRecord saveRecord;
     public LeaderBoardManager leaderboard;
 
@@ -62,28 +63,32 @@ public class Clear3DConditionManager : MonoBehaviour
         // playerisGoal이 체크된 경우 플레이어가 골에 도착했는지를 확인함. 새로운 조건이 추가되면 아래 항에 이어서 확장하면 됨.
         if (playerisGoal && !arrivedPlayer())
         {
-            ResetObject();
-            clearSource.PlayOneShot(failed);
-            wsclient.isBusy = false;
+            Incorrect();
             return;
         }
             
         if (playerisHaving && !heldPieces())
         {
-            ResetObject();
-            clearSource.PlayOneShot(failed);
-            wsclient.isBusy = false;
+            Incorrect();
             return;
         }
 
         if (pieceisGoal && !arrivePiece())
         {
-            ResetObject();
-            clearSource.PlayOneShot(failed);
-            wsclient.isBusy = false;
+            Incorrect();
             return;
         }
-    StartCoroutine(RunClearFlow());
+
+        StartCoroutine(RunClearFlow());
+    }
+
+    private void Incorrect()
+    {
+        ResetObject();
+        clearSource.PlayOneShot(failed);
+        warning.ShowBusyNotice("틀렸습니다...\n다시 생각해보세요.", true, 72);
+        wsclient.isBusy = false;
+        return;
     }
 
     IEnumerator RunClearFlow()
@@ -173,17 +178,20 @@ public class Clear3DConditionManager : MonoBehaviour
     // 모든 플레이어가 모든 goal과 일치하는지.
     public bool arrivedPlayer()
     {
-        return !SceneHubManager.I.roadTs.Where((t, i) =>
+        return SceneHubManager.I.roadTs.All(road =>
         {
-            Vector3 a = t.position;
-            Vector3 b = SceneHubManager.I.goalTs[i].position;
-
-            // Y축 제외한 평면 거리 비교
+            Vector3 a = road.position;
             a.y = 0;
-            b.y = 0;
 
-            return Vector3.Distance(a, b) > 0.1f;
-        }).Any();
+            // goalTs 중 하나라도 충분히 가까우면 true
+            return SceneHubManager.I.goalTs.Any(goal =>
+            {
+                Vector3 b = goal.position;
+                b.y = 0;
+
+                return Vector3.Distance(a, b) <= 0.1f;
+            });
+        });
     }
 
     public bool heldPieces()

@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using UnityEngine.EventSystems;
+using System.Collections;
 
 public class InteractManager : MonoBehaviour
 {
@@ -23,9 +25,6 @@ public class InteractManager : MonoBehaviour
     public bool controlColliders = false; // 콜라이더 토글 (충돌/레이캐스트 막기까지)
 
     private bool isTop = false;
-
-    [Header("Lock movement in TopView")]
-    public GameObject joystickUI;          // Canvas > Variable Joystick 
 
     // 캐시: 자식들까지 포함한 컴포넌트 목록과 초기 상태
     private Renderer[] renderers;
@@ -107,7 +106,7 @@ public class InteractManager : MonoBehaviour
         pauseButtonImage.sprite = paused ? playSprite : pauseSprite;
     }
 
-    void DoReset()
+    public void DoReset()
     {
         // 즉시 중단
         promptInterpreter?.StopScript();
@@ -118,7 +117,7 @@ public class InteractManager : MonoBehaviour
         paused = false; // 상태값 초기화
         pauseButtonImage.sprite = playSprite;
 
-       Debug.Log("[UI] Reset done");
+        Debug.Log("[UI] Reset done");
     }
 
     // ---- 카메라 토글 ----
@@ -141,8 +140,15 @@ public class InteractManager : MonoBehaviour
         SetCeilingVisible(false);   // Renderer
         SetCeilingCollidable(false);// Collider(옵션)
 
-        // 이동 잠금
-        if (joystickUI) joystickUI.SetActive(false);
+        SceneHubManager.I.variableJoystick.SetActive(false);
+        SceneHubManager.I.variableJoystick.GetComponent<VariableJoystick>().OnPointerUp(new PointerEventData(EventSystem.current));
+        StartCoroutine(WaitForTimes());
+        SceneHubManager.I.JoystickManager.SetActive(false);
+    }
+
+    IEnumerator WaitForTimes()
+    {
+        yield return new WaitForSeconds(0.25f);
     }
 
     public void ShowMain(bool _)
@@ -158,7 +164,8 @@ public class InteractManager : MonoBehaviour
         RestoreCeilingStates();
 
         // 메인뷰 복귀 → 이동 재개
-        if (joystickUI) joystickUI.SetActive(true);
+        SceneHubManager.I.variableJoystick.SetActive(true);
+        SceneHubManager.I.JoystickManager.SetActive(true);
     }
 
     public void ResetLevel()

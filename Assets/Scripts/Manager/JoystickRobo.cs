@@ -5,21 +5,26 @@ using UnityEngine.EventSystems;
 
 public class JoystickRobo : MonoBehaviour
 {
-    public float speed = 25f;
     public VariableJoystick variableJoystick;
-    public float dragRotationSpeed = 0.2f;
     public AudioSource footstepSource;    // 캐릭터에 붙인 AudioSource
     public AudioClip footstepClip;        // 발소리 하나
-    public float stepInterval = 0.33f;     // 걸음 간격(초)
 
-    private Vector2 previousDragPos;
-    private bool isDragging = false;
-    private bool dragStartedOnRightSide = false;
+    private float speed = 7f;
+    private float dragRotationSpeed = 0.1f;
+    private float stepInterval = 0.33f;     // 걸음 간격(초)
+
     private float cameraX = 0f;  // X축 상하 회전 (Pitch)
     private float cameraY = 0f;  // Y축 좌우 회전 (Yaw)
 
     private int cameraOffset = 0;
     private float stepTimer;
+
+    // 회전 전용 입력 상태
+    private bool isRotating = false;
+    private int rotationTouchId = -1;         // 모바일용 활성 터치 ID
+    private Vector2 rotationPrevPos;
+
+    bool IsRightHalf(Vector2 screenPos) => screenPos.x > Screen.width * 0.45f;
 
     void Start()
     {
@@ -32,6 +37,7 @@ public class JoystickRobo : MonoBehaviour
     void Update()
     {
         HandleDragRotation(); // 마우스/터치 드래그로 회전
+        UpdateFootsteps();
 
         //Debug.DrawRay(SceneHubManager.I.mainCameraT.position, SceneHubManager.I.mainCameraT.forward * 10f, Color.red);
 
@@ -75,9 +81,6 @@ public class JoystickRobo : MonoBehaviour
                 System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
             }
         }
-        
-
-        UpdateFootsteps();
     }
 
     void FixedUpdate()
@@ -104,61 +107,101 @@ public class JoystickRobo : MonoBehaviour
 
     void HandleDragRotation()
     {
-        Vector2 currentPos = Vector2.zero;
-        bool draggingNow = false;
-
-        // 터치 입력
-        if (Input.touchCount == 1)
+        // --- 모바일 터치 처리 ---
+        if (Input.touchCount > 0)
         {
-            Touch touch = Input.GetTouch(0);
-            currentPos = touch.position;
-
-            if (touch.phase == TouchPhase.Began)
+            // 이미 회전 중이면: 해당 fingerId만 추적
+            if (isRotating && rotationTouchId >= 0)
             {
-                isDragging = true;
-                previousDragPos = currentPos;
+                for (int i = 0; i < Input.touchCount; i++)
+                {
+                    var t = Input.GetTouch(i);
+                    if (t.fingerId != rotationTouchId) continue;
 
-                dragStartedOnRightSide = (currentPos.x > Screen.width * 0.5f);
+                    if (t.phase == TouchPhase.Moved)
+                    {
+                        Vector2 delta = t.position - rotationPrevPos;
+                        rotationPrevPos = t.position;
+
+                        cameraY += delta.x * dragRotationSpeed;
+                        cameraX -= delta.y * dragRotationSpeed;
+                        cameraX = Mathf.Clamp(cameraX, -35f, 25f);
+                        SceneHubManager.I.rotationObjectT.rotation = Quaternion.Euler(cameraX, cameraY, 0f);
+                    }
+                    else if (t.phase == TouchPhase.Ended || t.phase == TouchPhase.Canceled)
+                    {
+                        isRotating = false;
+                        rotationTouchId = -1;
+                    }
+                    // 다른 phase는 무시
+                    return; // 회전 터치만 처리하고 종료
+                }
             }
-            else if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
+
+            // 회전이 아직 아님: "우측 절반 + UI가 아닌 곳" 에서 Began일 때만 시작
+            for (int i = 0; i < Input.touchCount; i++)
             {
-                isDragging = false;
+                var t = Input.GetTouch(i);
+                if (t.phase != TouchPhase.Began) continue;
+
+                // 좌/우 절반 스크린 분기
+                if (!IsRightHalf(t.position)) continue; // 좌측은 이동만
+
+                // 시작 시점 UI 위면 회전 시작 금지
+                // (시작 이후에는 UI 여부를 보지 않음)
+                bool beganOverUI = EventSystem.current != null &&
+                                   EventSystem.current.IsPointerOverGameObject(t.fingerId);
+                if (beganOverUI) continue;
+
+                // 회전 시작
+                isRotating = true;
+                rotationTouchId = t.fingerId;
+                rotationPrevPos = t.position;
+                return;
             }
 
-            if (touch.phase == TouchPhase.Moved)
-                draggingNow = true;
+            return;
         }
-        // 마우스 입력
-        else if (Input.GetMouseButton(0))
+
+        // --- 데스크톱 마우스 처리 ---
+        // 좌클릭 Down: 우측 절반 + UI가 아닌 곳에서만 회전 시작
+        if (Input.GetMouseButtonDown(0))
         {
-            currentPos = Input.mousePosition;
+            Vector2 pos = Input.mousePosition;
 
-            if (Input.GetMouseButtonDown(0))
+            if (IsRightHalf(pos))
             {
-                isDragging = true;
-                previousDragPos = currentPos;
-
-                dragStartedOnRightSide = (currentPos.x > Screen.width * 0.5f);
+                bool beganOverUI = EventSystem.current != null &&
+                                   EventSystem.current.IsPointerOverGameObject(); // 마우스는 fingerId 없음
+                if (!beganOverUI)
+                {
+                    isRotating = true;
+                    rotationPrevPos = pos;
+                }
             }
-            else if (Input.GetMouseButtonUp(0))
+            else
             {
-                isDragging = false;
+                // 좌측 클릭은 이동용(조이스틱/UI)으로 남겨둠 → 회전 시작 안 함
+                isRotating = false;
             }
-
-            draggingNow = true;
         }
 
-        if (isDragging && draggingNow && dragStartedOnRightSide)
+        // 드래그 중: 시작만 우측/비UI였으면 계속 회전 (UI 위여도 계속)
+        if (isRotating && Input.GetMouseButton(0))
         {
-            Vector2 delta = currentPos - previousDragPos;
-            previousDragPos = currentPos;
+            Vector2 pos = Input.mousePosition;
+            Vector2 delta = pos - rotationPrevPos;
+            rotationPrevPos = pos;
 
             cameraY += delta.x * dragRotationSpeed;
             cameraX -= delta.y * dragRotationSpeed;
-
             cameraX = Mathf.Clamp(cameraX, -35f, 25f);
-
             SceneHubManager.I.rotationObjectT.rotation = Quaternion.Euler(cameraX, cameraY, 0f);
+        }
+
+        if (Input.GetMouseButtonUp(0))
+        {
+            isRotating = false;
         }
     }
 

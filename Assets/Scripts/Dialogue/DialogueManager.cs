@@ -231,6 +231,7 @@ public class DialogueManager : MonoBehaviour
         SceneHubManager.I.variableJoystick.SetActive(true);
         SceneHubManager.I.prompt.SetActive(true);
         SceneHubManager.I.interact.SetActive(true);
+        SceneHubManager.I.JoystickManager.SetActive(true);
 
         Debug.Log("대화 종료");
         // 대화 끝나면 다시 통행 허용

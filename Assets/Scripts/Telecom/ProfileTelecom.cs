@@ -14,7 +14,7 @@ public class ProfileTelecom : MonoBehaviour
     {
         if (restBaseUrl == "")
         {
-            restBaseUrl = "https://" + GameData.serverurl + ":8001";
+            restBaseUrl = "https://" + GameData.serverurl + GameData.serverPort;
         }
     }
 
@@ -28,7 +28,6 @@ public class ProfileTelecom : MonoBehaviour
             Debug.LogError("[Profile] GameData.userId가 비어있습니다. 먼저 사용자 ID를 설정하세요.");
             yield break;
         }
-        Debug.Log(GameData.userText);
         int clamped = Mathf.Clamp(newProfile, 0, 2);
         string url = $"{restBaseUrl}/users/{UnityWebRequest.EscapeURL(GameData.userText)}/profile_image";
 

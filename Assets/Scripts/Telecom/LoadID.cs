@@ -50,7 +50,7 @@ public class LoadID : MonoBehaviour
     private void Start()
     {
         if (restBaseUrl == "") {
-            restBaseUrl = "https://" + GameData.serverurl + ":8001";
+            restBaseUrl = "https://" + GameData.serverurl + GameData.serverPort;
         }
     }
 
@@ -72,6 +72,7 @@ public class LoadID : MonoBehaviour
         if (string.IsNullOrEmpty(uid))
         {
             Debug.Log("ID를 입력하세요.");
+            StartCoroutine(CoShowBusyNotice("ID를 입력하세요..."));
             return;
         }
 
@@ -114,10 +115,24 @@ public class LoadID : MonoBehaviour
                 ExecuteStagesStatus(resp);
                 sceneLoadManager.load(0);
             }
+            // 유저 조회 실패
+            else if(code == 404)
+            {
+                StartCoroutine(CoShowBusyNotice("새로운 ID를 생성 중입니다..."));
+                yield return new WaitForSeconds(2f);
+                Debug.Log("[LoadID] 진행 데이터 없음 → 신규 ID 생성");
+                yield return CreateNewId(uid);
+
+                // 신규 생성 후 다시 진행 조회
+                yield return FetchProgressOnly(uid);
+                sceneLoadManager.load(0);
+                yield break;
+            }
+            // 서버가 꺼져있는 경우
             else
             {
-                // 서버가 꺼져있는 경우
-                StartCoroutine(CoShowBusyNotice("서버에 연결되어 있지 않습니다..."));
+                StartCoroutine(CoShowBusyNotice("서버에 연결되어 있지 않습니다...\n 잠시 후, 오프라인 모드로 접속됩니다..."));
+                yield return new WaitForSeconds(2f);
                 Debug.LogWarning($"[LoadID] 진행 조회 실패 (HTTP {code}) {req.error} :: {body}");
                 GameData.stageClear[0] = true;
                 GameData.profileImage = 0;
@@ -189,7 +204,6 @@ public class LoadID : MonoBehaviour
     void ExecuteStagesStatus(ProgressResponse resp)
     {
         GameData.profileImage = resp.profile_image;
-        Debug.Log($"Profile Number={GameData.profileImage}");
 
         int n = 0;
         foreach (var stage in resp.stages)

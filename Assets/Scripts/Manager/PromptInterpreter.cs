@@ -30,7 +30,6 @@ b_move(1)";
         executeRobo = new bool[SceneHubManager.I.roadTs.Length];
         clearExe();
         changePrompt(test);
-        // funsion_start();
     }
 
     private void clearExe()
@@ -105,7 +104,7 @@ b_move(1)";
         {
             yield return new WaitWhile(() => _paused);
             bool clearCon = false;
-            if (!raw.StartsWith("    ")) {
+            if (!(raw.StartsWith("    ") || raw.StartsWith("}"))) {
                 clearCon = true;
             }
 
